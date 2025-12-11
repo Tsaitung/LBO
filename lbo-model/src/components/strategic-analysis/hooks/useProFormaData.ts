@@ -4,18 +4,19 @@
  * Following Linus principle: Data structures over algorithms
  */
 
+import { useMemo } from 'react';
 import {
   useBusinessMetrics,
   useAssumptions,
   useMnaDeal,
-  useScenarios,
+  useScenarioAssumptions,
   useCurrentScenario,
   useBalanceSheets,
   useIncomeStatements,
   useCashFlows,
   useIsCalculated,
 } from '../../../hooks/typed-hooks';
-import { ScenariosContainer, DealDesignWithPlans } from '../../../types/hooks.types';
+import { DealDesignWithPlans } from '../../../types/hooks.types';
 import { BusinessMetricsBeforeAcquisition, EquityInjection, FinancingPlan } from '../../../types/financial';
 
 export interface ProFormaDataItem {
@@ -91,22 +92,16 @@ export interface ProFormaData {
 }
 
 export const useProFormaData = (): ProFormaData => {
-  // Use unified selectors
+  // Use unified selectors - prefer memoized selectors for stable references
   const businessMetrics = useBusinessMetrics();
   const futureAssumptions = useAssumptions();
   const mnaDealDesign = useMnaDeal();
-  const scenarios = useScenarios();
+  const currentScenarioData = useScenarioAssumptions(); // 直接使用 memoized selector
   const currentScenarioKey = useCurrentScenario();
   const balanceSheet = useBalanceSheets();
   const incomeStatement = useIncomeStatements();
   const cashFlow = useCashFlows();
   const isCalculated = useIsCalculated();
-
-  // Get current scenario data
-  const scenariosContainer = scenarios as ScenariosContainer;
-  const currentScenarioData = scenariosContainer?.scenarios?.[currentScenarioKey as keyof typeof scenariosContainer.scenarios] 
-    || scenariosContainer?.[currentScenarioKey] 
-    || scenariosContainer?.base;
 
   // Calculate enterprise value
   const entryMultiple = currentScenarioData?.entryEvEbitdaMultiple || 0;
@@ -215,24 +210,38 @@ export const useProFormaData = (): ProFormaData => {
     return data;
   };
 
-  const proFormaData = getProFormaDataFromRedux();
-
-  return {
-    data: proFormaData,
-    isLoading: !hasReduxData && !proFormaData,
-    hasData: hasReduxData && !!proFormaData && proFormaData.length > 0,
-    enterpriseValue: globalEnterpriseValue,
+  // 使用 useMemo 保護整個返回值，避免每次渲染都創建新物件
+  return useMemo(() => {
+    const proFormaData = getProFormaDataFromRedux();
+    return {
+      data: proFormaData,
+      isLoading: !hasReduxData && !proFormaData,
+      hasData: hasReduxData && !!proFormaData && proFormaData.length > 0,
+      enterpriseValue: globalEnterpriseValue,
+      entryMultiple,
+      currentScenarioKey: currentScenarioKey as string,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    balanceSheet,
+    incomeStatement,
+    cashFlow,
+    futureAssumptions,
+    mnaDealDesign,
+    businessMetrics,
+    globalEnterpriseValue,
     entryMultiple,
-    currentScenarioKey: currentScenarioKey as string,
-  };
+    currentScenarioKey,
+    hasReduxData,
+  ]);
 };
 
 // Key metrics calculation
+// Note: scenarios parameter was removed as it was unused
 export const calculateKeyMetrics = (
   proFormaData: ProFormaDataItem[],
   businessMetrics: BusinessMetricsBeforeAcquisition,
   mnaDealDesign: DealDesignWithPlans,
-  scenarios: ScenariosContainer,
   currentScenarioKey: string,
   entryMultiple: number,
   enterpriseValue: number

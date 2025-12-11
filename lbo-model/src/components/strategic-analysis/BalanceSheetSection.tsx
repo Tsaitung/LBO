@@ -15,23 +15,20 @@ import {
 import { useBalanceSheets } from '../../hooks/typed-hooks';
 import { ProFormaDataItem } from './hooks/useProFormaData';
 import { BusinessMetricsBeforeAcquisition, FutureAssumptions, MnaDealDesign } from '../../types/financial';
-import { ScenarioAssumptions } from '../../types/store.types';
 
 interface BalanceSheetSectionProps {
   proFormaData: ProFormaDataItem[];
   businessMetrics: BusinessMetricsBeforeAcquisition;
   futureAssumptions: FutureAssumptions;
   mnaDealDesign: MnaDealDesign;
-  currentScenarioData?: ScenarioAssumptions;
   globalEnterpriseValue?: number;
 }
 
-const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({
+const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = React.memo(({
   proFormaData,
   businessMetrics,
   futureAssumptions,
   mnaDealDesign,
-  currentScenarioData,
   globalEnterpriseValue,
 }) => {
   // 使用 Redux 計算的資產負債表數據（單一數據源）
@@ -343,6 +340,6 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({
       </Alert>
     </>
   );
-};
+});
 
 export default BalanceSheetSection;

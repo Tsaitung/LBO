@@ -18,21 +18,19 @@ interface BalanceSheetPanelProps {
  */
 export const BalanceSheetPanel: React.FC<BalanceSheetPanelProps> = React.memo(({ data }) => {
   // 獲取必要的數據
-  const { 
-    businessMetrics, 
-    futureAssumptions, 
-    mnaDealDesign, 
-    currentScenarioData, 
-    globalEnterpriseValue 
+  const {
+    businessMetrics,
+    futureAssumptions,
+    mnaDealDesign,
+    globalEnterpriseValue
   } = useProFormaCalculations();
-  
+
   return (
-    <BalanceSheetSection 
+    <BalanceSheetSection
       proFormaData={data as ProFormaDataItem[]}
       businessMetrics={businessMetrics}
       futureAssumptions={futureAssumptions}
       mnaDealDesign={mnaDealDesign}
-      currentScenarioData={currentScenarioData || undefined}
       globalEnterpriseValue={globalEnterpriseValue}
     />
   );

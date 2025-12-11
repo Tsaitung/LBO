@@ -29,6 +29,15 @@ import {
   CovenantData,
   KPIMetrics
 } from '../types/financial';
+import {
+  selectFutureAssumptions,
+  selectScenariosObject,
+  selectCurrentScenarioAssumptions,
+  selectBusinessMetrics as selectBusinessMetricsMemoized,
+  selectMnaDeal as selectMnaDealMemoized,
+  selectCurrentScenarioKey,
+  selectFinancingPlans as selectFinancingPlansMemoized,
+} from '../store/selectors/memoized/proForma.selectors';
 
 // 類型化的 hooks
 export const useAppDispatch = () => useDispatch<AppDispatch>();
@@ -68,57 +77,25 @@ export const useSmartDispatch = () => {
   };
 };
 
-// 便利的選擇器 hooks
+// 便利的選擇器 hooks - 使用 memoized selectors
 export const useBusinessMetrics = () => {
-  return useSmartSelector(
-    (state) => state.lbo.businessMetrics,
-    (state) => state.businessMetrics
-  );
+  return useAppSelector(selectBusinessMetricsMemoized);
 };
 
 /**
  * 從當前情境取得完整假設（ScenarioAssumptions 格式）
+ * 使用 memoized selector
  */
 export const useScenarioAssumptions = (): ScenarioAssumptions => {
-  return useAppSelector((state) => {
-    const modularState = state as ModularRootState;
-    const current = modularState.scenarios.current;
-    return modularState.scenarios.scenarios[current];
-  });
+  return useAppSelector(selectCurrentScenarioAssumptions);
 };
 
 /**
  * 從當前情境取得假設（轉換為 FutureAssumptions 格式）
- * 用於計算層兼容
+ * 用於計算層兼容 - 使用 memoized selector
  */
 export const useFutureAssumptions = (): FutureAssumptions => {
-  return useAppSelector((state) => {
-    const modularState = state as ModularRootState;
-    const scenario = modularState.scenarios.scenarios[modularState.scenarios.current];
-    return {
-      // 增長假設
-      revenueGrowthRate: scenario.revenueGrowthRate,
-      ebitdaMargin: scenario.ebitdaMargin,
-      netMargin: scenario.netMargin,
-      // 成本結構
-      cogsAsPercentageOfRevenue: scenario.cogsAsPercentageOfRevenue,
-      operatingExpensesAsPercentageOfRevenue: scenario.operatingExpensesAsPercentageOfRevenue,
-      // 資本支出
-      capexAsPercentageOfRevenue: scenario.capexAsPercentageOfRevenue,
-      capexGrowthRate: scenario.capexGrowthRate,
-      // 營運資本
-      accountsReceivableDays: scenario.accountsReceivableDays,
-      inventoryDays: scenario.inventoryDays,
-      accountsPayableDays: scenario.accountsPayableDays,
-      // 其他
-      taxRate: scenario.taxRate,
-      discountRate: scenario.discountRate,
-      // 計算參數
-      depreciationToCapexRatio: scenario.depreciationToCapexRatio,
-      fixedAssetsToCapexMultiple: scenario.fixedAssetsToCapexMultiple,
-      revolvingCreditRepaymentRate: scenario.revolvingCreditRepaymentRate,
-    };
-  });
+  return useAppSelector(selectFutureAssumptions);
 };
 
 // Alias for legacy naming
@@ -131,68 +108,23 @@ export const useAssumptions = () => useFutureAssumptions();
 export const useActiveAssumptions = useScenarioAssumptions;
 
 export const useMnaDealDesign = () => {
-  return useSmartSelector(
-    (state) => state.lbo.mnaDealDesign,
-    (state) => state.mnaDeal
-  );
+  return useAppSelector(selectMnaDealMemoized);
 };
 
 // Alias for legacy naming
 export const useMnaDeal = () => useMnaDealDesign();
 
 export const useFinancingPlans = () => {
-  return useSmartSelector(
-    (state) => state.lbo.financingPlans,
-    (state) => state.financingPlan.plans
-  );
+  return useAppSelector(selectFinancingPlansMemoized);
 };
 
 export const useCurrentScenario = (): ScenarioKeyModular => {
-  return useSmartSelector(
-    (state) => {
-      const cur = state.lbo.currentScenario as string;
-      if (cur === 'upper') return 'upside';
-      if (cur === 'lower') return 'downside';
-      return cur as ScenarioKeyModular; // 'base'
-    },
-    (state) => {
-      const cur = state.scenarios.current as string;
-      return cur as ScenarioKeyModular; // 'base', 'upside', 'downside'
-    }
-  );
+  return useAppSelector(selectCurrentScenarioKey) as ScenarioKeyModular;
 };
 
 export const useScenarios = (): ScenariosContainer => {
-  return useSmartSelector(
-    (state) => {
-      // Convert legacy format to ScenariosContainer
-      const legacyScenarios = state.lbo.scenarios;
-      return {
-        base: legacyScenarios.base,
-        upside: legacyScenarios.upper,
-        downside: legacyScenarios.lower,
-      } as ScenariosContainer;
-    },
-    (state) => {
-      const s = state.scenarios as {
-        current?: string;
-        scenarios?: {
-          base?: ScenarioAssumptions;
-          upside?: ScenarioAssumptions;
-          downside?: ScenarioAssumptions;
-        };
-        base?: ScenarioAssumptions;
-        upside?: ScenarioAssumptions;
-        downside?: ScenarioAssumptions;
-      };
-      const scenarios = s?.scenarios || {};
-      return {
-        base: scenarios.base || s?.base || {} as ScenarioAssumptions,
-        upside: scenarios.upside || s?.upside,
-        downside: scenarios.downside || s?.downside,
-      } as ScenariosContainer;
-    }
-  );
+  // 直接使用基礎 selector，避免 identity function 警告
+  return useAppSelector(selectScenariosObject) as ScenariosContainer;
 };
 
 // Calculations hooks (migrated from legacy useAppSelectors)
@@ -200,23 +132,25 @@ export const useCalculationInput = (): CalculationInput | null => {
   const businessMetrics = useBusinessMetrics();
   const assumptions = useAssumptions();
   const dealDesign = useMnaDeal() as DealDesignWithPlans;
-  const scenarios = useScenarios();
-  const currentKey = useCurrentScenario();
-  const scenario = scenarios[currentKey];
-  
-  if (!businessMetrics || !assumptions || !dealDesign || !scenario) {
-    return null;
-  }
-  
-  return {
-    businessMetrics,
-    assumptions,
-    dealDesign,
-    financingPlans: dealDesign?.financingPlans || [],
-    equityInjections: dealDesign?.equityInjections || [],
-    scenario,
-    planningHorizon: dealDesign?.planningHorizon || 5
-  };
+  // 直接獲取當前 scenario，避免經過 useScenarios() 創建不穩定物件
+  const scenario = useScenarioAssumptions();
+
+  // 使用 useMemo 避免每次渲染都創建新物件
+  return useMemo(() => {
+    if (!businessMetrics || !assumptions || !dealDesign || !scenario) {
+      return null;
+    }
+    return {
+      businessMetrics,
+      assumptions,
+      dealDesign,
+      financingPlans: dealDesign?.financingPlans || [],
+      equityInjections: dealDesign?.equityInjections || [],
+      scenario,
+      planningHorizon: dealDesign?.planningHorizon || 5
+    };
+  }, [businessMetrics, assumptions, dealDesign, scenario]);
+  // 移除 scenarios 和 currentKey 依賴，因為 scenario 已經是當前情境的值
 };
 
 export const useCalculatedResults = (): CalculationResults | null => {

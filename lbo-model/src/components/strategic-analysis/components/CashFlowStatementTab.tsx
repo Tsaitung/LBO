@@ -23,7 +23,7 @@ interface CashFlowStatementTabProps {
   proFormaData: ProFormaDataItem[];
 }
 
-const CashFlowStatementTab: React.FC<CashFlowStatementTabProps> = ({ proFormaData }) => {
+const CashFlowStatementTab: React.FC<CashFlowStatementTabProps> = React.memo(({ proFormaData }) => {
   return (
     <>
       <Alert severity="info" sx={{ mb: 2 }}>
@@ -186,6 +186,6 @@ const CashFlowStatementTab: React.FC<CashFlowStatementTabProps> = ({ proFormaDat
       </TableContainer>
     </>
   );
-};
+});
 
 export default CashFlowStatementTab;

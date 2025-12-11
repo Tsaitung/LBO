@@ -24,7 +24,7 @@ import ShowChartIcon from '@mui/icons-material/ShowChart';
 
 // Import hooks
 import { useProFormaData, calculateKeyMetrics } from './hooks/useProFormaData';
-import { useBusinessMetrics, useMnaDeal, useScenarios, useAssumptions, useCurrentScenario } from '../../hooks/typed-hooks';
+import { useBusinessMetrics, useMnaDeal, useAssumptions, useCurrentScenario } from '../../hooks/typed-hooks';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 
 // Import components
@@ -69,7 +69,6 @@ const ProFormaFinancials: React.FC = () => {
   const { data: proFormaData, hasData, enterpriseValue, entryMultiple } = useProFormaData();
   const businessMetrics = useBusinessMetrics();
   const mnaDealDesign = useMnaDeal();
-  const scenarios = useScenarios();
   const currentScenarioKey = useCurrentScenario();
   const futureAssumptions = useAssumptions();
 
@@ -90,12 +89,11 @@ const ProFormaFinancials: React.FC = () => {
       proFormaData,
       businessMetrics,
       mnaDealDesign,
-      scenarios,
       currentScenarioKey,
       entryMultiple,
       enterpriseValue
     );
-  }, [proFormaData, businessMetrics, mnaDealDesign, scenarios, currentScenarioKey, entryMultiple, enterpriseValue]);
+  }, [proFormaData, businessMetrics, mnaDealDesign, currentScenarioKey, entryMultiple, enterpriseValue]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -155,12 +153,11 @@ const ProFormaFinancials: React.FC = () => {
 
             {/* Balance Sheet Tab */}
             <TabPanel value={tabValue} index={1}>
-              <BalanceSheetSection 
+              <BalanceSheetSection
                 proFormaData={proFormaData}
                 businessMetrics={businessMetrics}
                 futureAssumptions={futureAssumptions}
                 mnaDealDesign={mnaDealDesign}
-                currentScenarioData={scenarios?.scenarios?.[currentScenarioKey] || scenarios?.base || undefined}
               />
             </TabPanel>
 

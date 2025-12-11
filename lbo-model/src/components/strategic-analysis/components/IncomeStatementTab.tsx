@@ -23,7 +23,7 @@ interface IncomeStatementTabProps {
   proFormaData: ProFormaDataItem[];
 }
 
-const IncomeStatementTab: React.FC<IncomeStatementTabProps> = ({ proFormaData }) => {
+const IncomeStatementTab: React.FC<IncomeStatementTabProps> = React.memo(({ proFormaData }) => {
   return (
     <>
       <Alert severity="info" sx={{ mb: 2 }}>
@@ -87,6 +87,6 @@ const IncomeStatementTab: React.FC<IncomeStatementTabProps> = ({ proFormaData })
       </TableContainer>
     </>
   );
-};
+});
 
 export default IncomeStatementTab;
