@@ -179,7 +179,6 @@ export function calculateBalanceSheet(
   // 計算 Year 0 商譽
   const baseEbitda = incomeStatements[0]?.ebitda || businessMetrics.ebitda;
   const enterpriseValueK = DealCalculator.calculateEnterpriseValue(baseEbitda, scenario!.entryEvEbitdaMultiple); // 單位：仟元
-  // 商譽（仟元）：EV(仟) - 淨資產(仟)
   const isAssetDeal = dealDesign?.dealType === 'assetAcquisition';
   const sel = dealDesign?.assetSelections || {
     cashAndCashEquivalents: false,
@@ -204,7 +203,18 @@ export function calculateBalanceSheet(
   const netAssetsK = isAssetDeal
     ? (selectedAssetsValueK - selectedLiabsValueK)
     : businessMetrics.shareholdersEquity;
-  const goodwill = Math.max(0, enterpriseValueK - netAssetsK);
+
+  // 商譽計算邏輯：
+  // - 股權收購：商譽 = EV - 淨資產（股東權益）
+  // - 資產收購：商譽 = 頭期款（交割前/交割時）- 選定淨資產
+  //   後續款項（Year 1+）視為費用，不計入商譽
+  let goodwill: number;
+  if (isAssetDeal && dealDesign) {
+    const upfrontPaymentK = DealCalculator.calculateUpfrontPayment(enterpriseValueK, dealDesign);
+    goodwill = Math.max(0, upfrontPaymentK - netAssetsK);
+  } else {
+    goodwill = Math.max(0, enterpriseValueK - netAssetsK);
+  }
   
   // Year 0 股權注入（仟元）- removed unused variable per ESLint warning
   

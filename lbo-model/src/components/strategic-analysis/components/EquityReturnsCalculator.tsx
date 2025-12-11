@@ -61,39 +61,53 @@ export const calculateEquityReturns = ({
       cashFlows.push(-investmentAmount);
     }
     
-    // Years 1 to N-1: Dividend income
+    // Years 1 to N-1: Dividend income (使用現金流量表的實際數據)
     for (let year = 1; year < exitYear; year++) {
       const yearData = proFormaData.find(d => d.year === year);
-      if (!yearData) continue;
-      
+      if (!yearData) {
+        cashFlows.push(0);
+        continue;
+      }
+
       let dividend = 0;
-      
+
       if (injection.type === 'preferred') {
-        const dividendRate = injection.dividendRate || 0;
-        dividend = investmentAmount * (dividendRate / 100);
-        
+        // 使用現金流量表的實際優先股股息（而非理論公式）
+        const actualPreferredDividends = parseFloat(yearData.preferredDividends || '0');
+
+        // 計算該投資者佔優先股總額的比例
+        const totalPreferredAmount = mnaDealDesign.equityInjections
+          .filter((e: EquityInjection) => e.type === 'preferred')
+          .reduce((sum: number, e: EquityInjection) => sum + e.amount / 1000, 0);
+
+        if (totalPreferredAmount > 0) {
+          dividend = actualPreferredDividends * (investmentAmount / totalPreferredAmount);
+        }
+
+        // 若有參與普通股分配權，加入普通股股息分配
         if (injection.specialTerms?.participateInCommonDividend) {
           const commonDividend = parseFloat(yearData.commonDividend || '0');
           const totalParticipatingEquity = mnaDealDesign.equityInjections
-            .filter((e: EquityInjection) => e.type === 'common' || 
+            .filter((e: EquityInjection) => e.type === 'common' ||
               (e.type === 'preferred' && e.specialTerms?.participateInCommonDividend))
             .reduce((sum: number, e: EquityInjection) => sum + e.ownershipPercentage, 0);
-          
+
           if (totalParticipatingEquity > 0) {
             dividend += commonDividend * (ownershipPercentage / totalParticipatingEquity);
           }
         }
       } else if (injection.type === 'common') {
+        // 普通股：使用現金流量表的實際普通股股息
+        const commonDividend = parseFloat(yearData.commonDividend || '0');
         const totalCommonEquity = mnaDealDesign.equityInjections
           .filter((e: EquityInjection) => e.type === 'common')
           .reduce((sum: number, e: EquityInjection) => sum + e.ownershipPercentage, 0);
-        
+
         if (totalCommonEquity > 0) {
-          const commonDividend = parseFloat(yearData.commonDividend || '0');
           dividend = commonDividend * (ownershipPercentage / totalCommonEquity);
         }
       }
-      
+
       cashFlows.push(dividend);
     }
     

@@ -124,7 +124,9 @@ export class CalculateBaseStage implements CalculationStage {
         context.businessMetrics,
         context.assumptions,
         context.planningHorizon,
-        debtSchedule  // 添加缺失的債務明細參數
+        debtSchedule,
+        context.dealDesign,
+        context.scenario
       );
       
       // 3. 計算資產負債表

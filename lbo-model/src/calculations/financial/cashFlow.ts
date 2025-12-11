@@ -339,6 +339,9 @@ export function calculateCashFlow(
   // 計算購買價格：統一使用 DealCalculator
   const purchasePrice = DealCalculator.calculatePurchasePrice(baseEbitda, scenario, dealDesign);
 
+  // 判斷是否為資產收購（用於區分遞延付款的分類）
+  const isAssetDeal = dealDesign?.dealType === 'assetAcquisition';
+
   // 付款時程：以 paymentSchedule 為準；若未設定，回退到 paymentStructure
   const dealWithSettings = dealDesign as MnaDealDesign & {
     assetDealSettings?: {
@@ -450,8 +453,21 @@ export function calculateCashFlow(
     
     // 取得該年度的現金收購付款（根據 timing 設定）
     const cashPurchaseThisYear = getCashPaymentForYear(year);
-    // 投資活動現金流（包含購買價的現金支付）
-    const investingCashFlow = calculateInvestingCashFlow(capex + cashPurchaseThisYear, transactionFee);
+
+    // 計算遞延付款費用（資產收購 Year 1+ 的付款視為營運費用）
+    // 對於資產收購：Year 1+ 付款是費用（已在損益表扣除），不計入投資活動
+    // 對於股權收購：所有付款都是投資活動
+    const deferredPaymentExpense = (isAssetDeal && year > 0)
+      ? DealCalculator.calculateDeferredPaymentExpense(purchasePrice, year, dealDesign)
+      : 0;
+
+    // 投資活動現金流
+    // - 股權收購：所有收購付款都是投資活動
+    // - 資產收購：只有頭期款（Year 0）是投資活動，Year 1+ 付款是費用（已在營運活動反映）
+    const acquisitionPaymentForInvesting = isAssetDeal
+      ? (year === 0 ? cashPurchaseThisYear : (cashPurchaseThisYear - deferredPaymentExpense))
+      : cashPurchaseThisYear;
+    const investingCashFlow = calculateInvestingCashFlow(capex + acquisitionPaymentForInvesting, transactionFee);
     
     // 計算債務償還
     const principalRepayment = calculateTotalPrincipalRepayment(debtSchedule, year);
@@ -591,11 +607,10 @@ export function calculateCashFlow(
 
     // 將普通股利納入融資現金流（作為現金流出）
     const financingCashFlow = financingCashFlowBeforeCommon - commonDividend;
-    
-    // 普通股利減少股東權益
-    if (balanceSheets[year] && commonDividend > 0) {
-      balanceSheets[year].equity = (balanceSheets[year].equity || 0) - commonDividend;
-    }
+
+    // 注意：普通股利對股東權益的影響將在下方使用會計恆等式統一處理
+    // 移除此處的單獨 equity 修改，避免破壞會計恆等式
+
     const netCashFlow = operatingCashFlow + investingCashFlow + financingCashFlow;
     const endingCash = beginningCash + netCashFlow;
     
@@ -616,35 +631,41 @@ export function calculateCashFlow(
       interestPaid: income.interestExpense || 0,
       capex,
       transactionFeePaid: transactionFee,
-      cashAcquisitionPayment: cashPurchaseThisYear,
+      cashAcquisitionPayment: acquisitionPaymentForInvesting > 0 ? acquisitionPaymentForInvesting : undefined,
+      deferredPaymentExpense: deferredPaymentExpense > 0 ? deferredPaymentExpense : undefined,
       nwcChange,
       dividendDiagnostics: diagnostics,
     });
     
     // 更新資產負債表：現金和股東權益
     if (balanceSheets[year]) {
-      // 更新現金為正確的期末現金
+      // 1. 更新現金為正確的期末現金
       balanceSheets[year].cash = endingCash;
-      
-      // 重新計算總資產（現金已更新）
+
+      // 2. 重新計算總資產（現金已更新）
       balanceSheets[year].totalAssets = endingCash +
         balanceSheets[year].accountsReceivable +
         balanceSheets[year].inventory +
         balanceSheets[year].fixedAssets +
         (balanceSheets[year].goodwill || 0);
-        
-      // 重新計算 totalLiabilities（不含權益）
-      balanceSheets[year].totalLiabilities = 
+
+      // 3. 重新計算 totalLiabilities（不含權益）
+      balanceSheets[year].totalLiabilities =
         (balanceSheets[year].accountsPayable || 0) +
         (balanceSheets[year].otherCurrentLiabilities || 0) +
         (balanceSheets[year].debt || 0) +
         (balanceSheets[year].preferredStock || 0);
-        
-      // 股東權益應該通過滾動計算得出，而非強制使用會計恆等式
-      // 滾動計算已在 balanceSheet.ts 中完成
-      
-      // 計算 totalLiabilitiesEquity
-      balanceSheets[year].totalLiabilitiesEquity = balanceSheets[year].totalAssets;
+
+      // 4. 【關鍵修復】使用會計恆等式計算股東權益
+      // Assets = Liabilities + Equity
+      // ∴ Equity = Assets - Liabilities
+      // 這確保會計恆等式永遠成立，避免股利計算時序問題
+      const totalAssets = balanceSheets[year].totalAssets ?? 0;
+      const totalLiabilities = balanceSheets[year].totalLiabilities ?? 0;
+      balanceSheets[year].equity = totalAssets - totalLiabilities;
+
+      // 5. 計算 totalLiabilitiesEquity（現在保證等於 totalAssets）
+      balanceSheets[year].totalLiabilitiesEquity = totalLiabilities + balanceSheets[year].equity;
     }
   }
   

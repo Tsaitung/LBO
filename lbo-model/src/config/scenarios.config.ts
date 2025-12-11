@@ -1,107 +1,105 @@
 /**
  * 場景配置管理
  * 遵循 Linus 原則：配置而非硬編碼
+ *
+ * 重要：此檔案現在從 master-defaults.ts 導入所有預設值
+ * 確保 Single Source of Truth (SSOT)
  */
 
 import { ScenarioAssumptions } from '../types/financial';
+import {
+  VALUATION_DEFAULTS,
+  GROWTH_DEFAULTS,
+  COST_STRUCTURE_DEFAULTS,
+  CAPEX_DEFAULTS,
+  WORKING_CAPITAL_DEFAULTS,
+  TAX_DISCOUNT_DEFAULTS,
+  DEBT_DEFAULTS,
+  SCENARIO_ADJUSTMENTS,
+} from './master-defaults';
 
-// 預設場景配置值（包含所有 ScenarioAssumptions 欄位）
+// Base 情境預設值（直接從 master-defaults 導出）
+const baseScenario: ScenarioAssumptions = {
+  // 情境參數
+  entryEvEbitdaMultiple: VALUATION_DEFAULTS.entryEvEbitdaMultiple,
+  exitEvEbitdaMultiple: VALUATION_DEFAULTS.exitEvEbitdaMultiple,
+  seniorDebtEbitda: VALUATION_DEFAULTS.seniorDebtEbitda,
+  mezzDebtEbitda: VALUATION_DEFAULTS.mezzDebtEbitda,
+  // 增長假設
+  revenueGrowthRate: GROWTH_DEFAULTS.revenueGrowthRate,
+  ebitdaMargin: GROWTH_DEFAULTS.ebitdaMargin,
+  netMargin: GROWTH_DEFAULTS.netMargin,
+  // 成本結構
+  cogsAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.cogsAsPercentageOfRevenue,
+  operatingExpensesAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.operatingExpensesAsPercentageOfRevenue,
+  // 資本支出
+  capexAsPercentageOfRevenue: CAPEX_DEFAULTS.capexAsPercentageOfRevenue,
+  capexGrowthRate: CAPEX_DEFAULTS.capexGrowthRate,
+  // 營運資本
+  accountsReceivableDays: WORKING_CAPITAL_DEFAULTS.accountsReceivableDays,
+  inventoryDays: WORKING_CAPITAL_DEFAULTS.inventoryDays,
+  accountsPayableDays: WORKING_CAPITAL_DEFAULTS.accountsPayableDays,
+  // 其他財務
+  taxRate: TAX_DISCOUNT_DEFAULTS.taxRate,
+  discountRate: TAX_DISCOUNT_DEFAULTS.discountRate,
+  // 計算參數
+  depreciationToCapexRatio: CAPEX_DEFAULTS.depreciationToCapexRatio,
+  fixedAssetsToCapexMultiple: CAPEX_DEFAULTS.fixedAssetsToCapexMultiple,
+  revolvingCreditRepaymentRate: DEBT_DEFAULTS.revolvingCreditRepaymentRate,
+  // 向後兼容
+  capExPctSales: CAPEX_DEFAULTS.capexAsPercentageOfRevenue,
+  nwcPctSales: 15,
+  corporateTaxRate: TAX_DISCOUNT_DEFAULTS.taxRate,
+};
+
+// 預設場景配置值（使用 SCENARIO_ADJUSTMENTS 計算差異）
 export const SCENARIO_DEFAULTS: Record<'base' | 'upper' | 'lower', ScenarioAssumptions> = {
-  base: {
-    // 情境參數
-    entryEvEbitdaMultiple: 3,  // 用戶要求的預設值
-    exitEvEbitdaMultiple: 12,
-    seniorDebtEbitda: 4,
-    mezzDebtEbitda: 2,
-    // 增長假設
-    revenueGrowthRate: 5,
-    ebitdaMargin: 25,
-    netMargin: 10,
-    // 成本結構
-    cogsAsPercentageOfRevenue: 60,
-    operatingExpensesAsPercentageOfRevenue: 15,
-    // 資本支出
-    capexAsPercentageOfRevenue: 4,
-    capexGrowthRate: 3,
-    // 營運資本
-    accountsReceivableDays: 45,
-    inventoryDays: 60,
-    accountsPayableDays: 35,
-    // 其他財務
-    taxRate: 20,
-    discountRate: 10,
-    // 計算參數
-    depreciationToCapexRatio: 20,
-    fixedAssetsToCapexMultiple: 10,
-    revolvingCreditRepaymentRate: 20,
-    // 向後兼容
-    capExPctSales: 4,
-    nwcPctSales: 15,
-    corporateTaxRate: 20,
-  },
+  base: baseScenario,
   upper: {
-    // 情境參數
-    entryEvEbitdaMultiple: 3,
-    exitEvEbitdaMultiple: 14,
-    seniorDebtEbitda: 3.5,
-    mezzDebtEbitda: 1.5,
+    ...baseScenario,
+    // 情境參數調整
+    exitEvEbitdaMultiple: VALUATION_DEFAULTS.exitEvEbitdaMultiple + SCENARIO_ADJUSTMENTS.upside.exitEvEbitdaMultiple,
+    seniorDebtEbitda: VALUATION_DEFAULTS.seniorDebtEbitda - 0.5,
+    mezzDebtEbitda: VALUATION_DEFAULTS.mezzDebtEbitda - 0.5,
     // 增長假設（樂觀）
-    revenueGrowthRate: 7,
-    ebitdaMargin: 28,
-    netMargin: 12,
+    revenueGrowthRate: GROWTH_DEFAULTS.revenueGrowthRate + SCENARIO_ADJUSTMENTS.upside.revenueGrowthRate,
+    ebitdaMargin: GROWTH_DEFAULTS.ebitdaMargin + SCENARIO_ADJUSTMENTS.upside.ebitdaMargin,
+    netMargin: GROWTH_DEFAULTS.netMargin + 2,
     // 成本結構（較低）
-    cogsAsPercentageOfRevenue: 58,
-    operatingExpensesAsPercentageOfRevenue: 14,
+    cogsAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.cogsAsPercentageOfRevenue + SCENARIO_ADJUSTMENTS.upside.cogsAdjustment,
+    operatingExpensesAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.operatingExpensesAsPercentageOfRevenue + SCENARIO_ADJUSTMENTS.upside.opexAdjustment,
     // 資本支出（較低）
-    capexAsPercentageOfRevenue: 3.5,
-    capexGrowthRate: 3,
+    capexAsPercentageOfRevenue: CAPEX_DEFAULTS.capexAsPercentageOfRevenue - 0.5,
     // 營運資本（更有效率）
-    accountsReceivableDays: 40,
-    inventoryDays: 55,
-    accountsPayableDays: 38,
-    // 其他財務
-    taxRate: 20,
-    discountRate: 10,
-    // 計算參數
-    depreciationToCapexRatio: 20,
-    fixedAssetsToCapexMultiple: 10,
-    revolvingCreditRepaymentRate: 20,
+    accountsReceivableDays: WORKING_CAPITAL_DEFAULTS.accountsReceivableDays - 5,
+    inventoryDays: WORKING_CAPITAL_DEFAULTS.inventoryDays - 5,
+    accountsPayableDays: WORKING_CAPITAL_DEFAULTS.accountsPayableDays + 3,
     // 向後兼容
-    capExPctSales: 3.5,
+    capExPctSales: CAPEX_DEFAULTS.capexAsPercentageOfRevenue - 0.5,
     nwcPctSales: 14,
-    corporateTaxRate: 20,
   },
   lower: {
-    // 情境參數
-    entryEvEbitdaMultiple: 3,
-    exitEvEbitdaMultiple: 10,
-    seniorDebtEbitda: 4.5,
-    mezzDebtEbitda: 2.5,
+    ...baseScenario,
+    // 情境參數調整
+    exitEvEbitdaMultiple: VALUATION_DEFAULTS.exitEvEbitdaMultiple + SCENARIO_ADJUSTMENTS.downside.exitEvEbitdaMultiple,
+    seniorDebtEbitda: VALUATION_DEFAULTS.seniorDebtEbitda + 0.5,
+    mezzDebtEbitda: VALUATION_DEFAULTS.mezzDebtEbitda + 0.5,
     // 增長假設（保守）
-    revenueGrowthRate: 3,
-    ebitdaMargin: 22,
-    netMargin: 8,
+    revenueGrowthRate: GROWTH_DEFAULTS.revenueGrowthRate + SCENARIO_ADJUSTMENTS.downside.revenueGrowthRate,
+    ebitdaMargin: GROWTH_DEFAULTS.ebitdaMargin + SCENARIO_ADJUSTMENTS.downside.ebitdaMargin,
+    netMargin: GROWTH_DEFAULTS.netMargin - 2,
     // 成本結構（較高）
-    cogsAsPercentageOfRevenue: 62,
-    operatingExpensesAsPercentageOfRevenue: 16,
+    cogsAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.cogsAsPercentageOfRevenue + SCENARIO_ADJUSTMENTS.downside.cogsAdjustment,
+    operatingExpensesAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.operatingExpensesAsPercentageOfRevenue + SCENARIO_ADJUSTMENTS.downside.opexAdjustment,
     // 資本支出（較高）
-    capexAsPercentageOfRevenue: 4.5,
-    capexGrowthRate: 3,
+    capexAsPercentageOfRevenue: CAPEX_DEFAULTS.capexAsPercentageOfRevenue + 0.5,
     // 營運資本（較差）
-    accountsReceivableDays: 50,
-    inventoryDays: 65,
-    accountsPayableDays: 32,
-    // 其他財務
-    taxRate: 20,
-    discountRate: 10,
-    // 計算參數
-    depreciationToCapexRatio: 20,
-    fixedAssetsToCapexMultiple: 10,
-    revolvingCreditRepaymentRate: 20,
+    accountsReceivableDays: WORKING_CAPITAL_DEFAULTS.accountsReceivableDays + 5,
+    inventoryDays: WORKING_CAPITAL_DEFAULTS.inventoryDays + 5,
+    accountsPayableDays: WORKING_CAPITAL_DEFAULTS.accountsPayableDays - 3,
     // 向後兼容
-    capExPctSales: 4.5,
+    capExPctSales: CAPEX_DEFAULTS.capexAsPercentageOfRevenue + 0.5,
     nwcPctSales: 16,
-    corporateTaxRate: 20,
   },
 };
 
@@ -163,14 +161,14 @@ export const getAllScenarios = (): Record<string, ScenarioAssumptions> => {
 
 /**
  * 獲取預設入場倍數（用於回退值）
- * 永遠返回 3，而非硬編碼的 10
+ * 從 master-defaults.ts 統一取得
  */
 export const getDefaultEntryMultiple = (): number => {
   const stored = getStoredScenarios();
-  
+
   if (stored && stored.base && stored.base.entryEvEbitdaMultiple) {
     return stored.base.entryEvEbitdaMultiple;
   }
-  
-  return 3;  // 用戶要求的預設值
+
+  return VALUATION_DEFAULTS.entryEvEbitdaMultiple;
 };

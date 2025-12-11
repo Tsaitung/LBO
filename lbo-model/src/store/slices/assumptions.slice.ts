@@ -2,39 +2,49 @@
  * Assumptions Slice
  * 管理未來預期假設參數
  * 從原本的 lboSlice.ts 拆分出來
+ *
+ * 使用 master-defaults.ts 作為唯一參數來源 (Single Source of Truth)
  */
 
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { FutureAssumptions } from '../../types/financial';
+import {
+  GROWTH_DEFAULTS,
+  COST_STRUCTURE_DEFAULTS,
+  CAPEX_DEFAULTS,
+  WORKING_CAPITAL_DEFAULTS,
+  TAX_DISCOUNT_DEFAULTS,
+  DEBT_DEFAULTS,
+} from '../../config/master-defaults';
 
-// 初始狀態
+// 初始狀態 - 從 master-defaults.ts 統一導入
 const initialState: FutureAssumptions = {
-  // 增長假設
-  revenueGrowthRate: 5.0, // 營收增長率 (%)
-  ebitdaMargin: 14.5, // EBITDA 利潤率 (%)
-  netMargin: 6.35, // 淨利率 (%)
+  // 增長假設 (from GROWTH_DEFAULTS)
+  revenueGrowthRate: GROWTH_DEFAULTS.revenueGrowthRate,
+  ebitdaMargin: GROWTH_DEFAULTS.ebitdaMargin,
+  netMargin: GROWTH_DEFAULTS.netMargin,
 
-  // 成本結構假設（新增）
-  cogsAsPercentageOfRevenue: 60, // COGS 占營收比例 (業界標準 60%)
-  operatingExpensesAsPercentageOfRevenue: 15, // 營業費用占營收比例 (業界標準 15%)
+  // 成本結構假設 (from COST_STRUCTURE_DEFAULTS)
+  cogsAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.cogsAsPercentageOfRevenue,
+  operatingExpensesAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.operatingExpensesAsPercentageOfRevenue,
 
-  // 資本支出假設
-  capexAsPercentageOfRevenue: 4.0, // CapEx/營收比例 (%)
-  capexGrowthRate: 3.0, // CapEx 增長率 (%)
+  // 資本支出假設 (from CAPEX_DEFAULTS)
+  capexAsPercentageOfRevenue: CAPEX_DEFAULTS.capexAsPercentageOfRevenue,
+  capexGrowthRate: CAPEX_DEFAULTS.capexGrowthRate,
 
-  // 營運資本假設
-  accountsReceivableDays: 45, // 應收帳款天數
-  inventoryDays: 60, // 存貨天數
-  accountsPayableDays: 35, // 應付帳款天數
+  // 營運資本假設 (from WORKING_CAPITAL_DEFAULTS)
+  accountsReceivableDays: WORKING_CAPITAL_DEFAULTS.accountsReceivableDays,
+  inventoryDays: WORKING_CAPITAL_DEFAULTS.inventoryDays,
+  accountsPayableDays: WORKING_CAPITAL_DEFAULTS.accountsPayableDays,
 
-  // 其他假設
-  taxRate: 20.0, // 稅率 (%)
-  discountRate: 10.0, // 折現率 (%)
-  
-  // 計算參數
-  depreciationToCapexRatio: 20.0, // D&A 佔 CapEx 的比例 (%)
-  fixedAssetsToCapexMultiple: 10, // 固定資產為 CapEx 的倍數
-  revolvingCreditRepaymentRate: 20.0, // 循環信用年償還率 (%)
+  // 其他假設 (from TAX_DISCOUNT_DEFAULTS)
+  taxRate: TAX_DISCOUNT_DEFAULTS.taxRate,
+  discountRate: TAX_DISCOUNT_DEFAULTS.discountRate,
+
+  // 計算參數 (from CAPEX_DEFAULTS + DEBT_DEFAULTS)
+  depreciationToCapexRatio: CAPEX_DEFAULTS.depreciationToCapexRatio,
+  fixedAssetsToCapexMultiple: CAPEX_DEFAULTS.fixedAssetsToCapexMultiple,
+  revolvingCreditRepaymentRate: DEBT_DEFAULTS.revolvingCreditRepaymentRate,
 };
 
 // 驗證函數

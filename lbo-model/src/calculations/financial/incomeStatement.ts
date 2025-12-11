@@ -8,8 +8,11 @@ import {
   FutureAssumptions,
   IncomeStatementData,
   DebtScheduleData,
+  MnaDealDesign,
+  ScenarioAssumptions,
 } from '../../types/financial';
 import { calculateTotalInterest } from './debtSchedule';
+import { DealCalculator } from '../../domain/deal/DealCalculator';
 
 /**
  * 計算年度營收
@@ -92,12 +95,17 @@ function calculateTaxes(
 /**
  * 計算損益表
  * 主函數
+ *
+ * @param dealDesign - 交易設計（可選），用於計算資產收購的遞延付款費用
+ * @param scenario - 情境假設（可選），用於計算 EV
  */
 export function calculateIncomeStatement(
   businessMetrics: BusinessMetricsBeforeAcquisition,
   assumptions: FutureAssumptions,
   planningHorizon: number,
-  debtSchedule: DebtScheduleData[]
+  debtSchedule: DebtScheduleData[],
+  dealDesign?: MnaDealDesign,
+  scenario?: ScenarioAssumptions
 ): IncomeStatementData[] {
   const incomeStatements: IncomeStatementData[] = [];
 
@@ -105,15 +113,25 @@ export function calculateIncomeStatement(
   let estimatedFixedAssets = businessMetrics.propertyPlantEquipment; // 單位：仟元
   const usefulLifeYears = Math.max(1, assumptions.fixedAssetsToCapexMultiple || 10); // 將倍數解讀為折舊年限
 
+  // 判斷是否為資產收購
+  const isAssetDeal = dealDesign?.dealType === 'assetAcquisition';
+
+  // 計算購買價格（用於遞延付款費用計算）
+  // 使用 Year 0 EBITDA 作為基礎
+  const year0EBITDA = businessMetrics.ebitda || (businessMetrics.revenue * 0.15); // fallback 15%
+  const purchasePrice = scenario?.entryEvEbitdaMultiple
+    ? DealCalculator.calculateEnterpriseValue(year0EBITDA, scenario.entryEvEbitdaMultiple)
+    : 0;
+
   // Year 0 數據 - 使用業務指標中的實際數據
   const year0COGS = businessMetrics.cogs || (businessMetrics.revenue * (assumptions.cogsAsPercentageOfRevenue / 100));
   const year0GrossProfit = businessMetrics.grossProfit || (businessMetrics.revenue - year0COGS);
   const year0GrossMargin = businessMetrics.grossMargin || calculateGrossMargin(year0GrossProfit, businessMetrics.revenue);
   const year0OperatingExpenses = businessMetrics.operatingExpenses || (businessMetrics.revenue * (assumptions.operatingExpensesAsPercentageOfRevenue / 100));
-  
+
   // Year 0 EBITDA 現在是計算得出的，而非獨立輸入
-  const year0EBITDA = calculateEBITDA(year0GrossProfit, year0OperatingExpenses);
-  
+  const year0EBITDACalc = calculateEBITDA(year0GrossProfit, year0OperatingExpenses);
+
   incomeStatements.push({
     year: 0,
     revenue: businessMetrics.revenue,
@@ -121,10 +139,11 @@ export function calculateIncomeStatement(
     grossProfit: year0GrossProfit,
     grossMargin: year0GrossMargin,
     operatingExpenses: year0OperatingExpenses,
-    ebitda: year0EBITDA, // 使用計算得出的 EBITDA
+    ebitda: year0EBITDACalc, // 使用計算得出的 EBITDA
     depreciationAmortization: businessMetrics.depreciationAmortization,
     interestExpense: businessMetrics.interestExpense,
-    ebit: year0EBITDA - businessMetrics.depreciationAmortization, // 使用計算的 EBITDA
+    deferredPaymentExpense: 0, // Year 0 無遞延付款費用
+    ebit: year0EBITDACalc - businessMetrics.depreciationAmortization, // 使用計算的 EBITDA
     taxes: businessMetrics.taxExpense,
     netIncome: businessMetrics.netIncome,
   });
@@ -160,10 +179,22 @@ export function calculateIncomeStatement(
     // 計算利息費用
     const interestExpense = calculateTotalInterest(debtSchedule, year);
 
-    // 計算 EBIT
-    const ebit = ebitda - depreciationAmortization;
+    // 計算資產收購遞延付款費用（Year 1+ 的付款視為費用）
+    // 僅適用於資產收購，且有設定 dealDesign 的情況
+    let deferredPaymentExpense = 0;
+    if (isAssetDeal && dealDesign && purchasePrice > 0) {
+      deferredPaymentExpense = DealCalculator.calculateDeferredPaymentExpense(
+        purchasePrice,
+        year,
+        dealDesign
+      );
+    }
 
-    // 計算稅金
+    // 計算 EBIT（含遞延付款費用）
+    // 遞延付款費用視為營業外費用，從 EBIT 扣除
+    const ebit = ebitda - depreciationAmortization - deferredPaymentExpense;
+
+    // 計算稅金（遞延付款費用可抵稅）
     const taxes = calculateTaxes(ebit - interestExpense, assumptions.taxRate);
 
     // 計算淨利
@@ -179,6 +210,7 @@ export function calculateIncomeStatement(
       ebitda,
       depreciationAmortization,
       interestExpense,
+      deferredPaymentExpense,
       ebit,
       taxes,
       netIncome,

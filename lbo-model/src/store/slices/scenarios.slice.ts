@@ -6,6 +6,16 @@
 
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { ScenarioAssumptions, FutureAssumptions } from '../../types/financial';
+import {
+  VALUATION_DEFAULTS,
+  GROWTH_DEFAULTS,
+  COST_STRUCTURE_DEFAULTS,
+  CAPEX_DEFAULTS,
+  WORKING_CAPITAL_DEFAULTS,
+  TAX_DISCOUNT_DEFAULTS,
+  DEBT_DEFAULTS,
+  SCENARIO_ADJUSTMENTS,
+} from '../../config/master-defaults';
 
 // 情境類型
 export type ScenarioType = 'base' | 'upside' | 'downside';
@@ -34,92 +44,102 @@ interface ScenariosState {
   };
 }
 
-// 創建預設情境（包含所有假設欄位）
+/**
+ * 創建預設情境（包含所有假設欄位）
+ * 使用 master-defaults.ts 作為唯一參數來源 (Single Source of Truth)
+ */
 function createDefaultScenario(type: ScenarioType): ScenarioAssumptions {
+  // Base 情境：直接使用 master-defaults 的值
   const baseValues: ScenarioAssumptions = {
-    // ========== 情境特有參數 ==========
-    entryEvEbitdaMultiple: 10,
-    exitEvEbitdaMultiple: 12,
-    seniorDebtEbitda: 4,
-    mezzDebtEbitda: 2,
+    // ========== 情境特有參數 (from VALUATION_DEFAULTS) ==========
+    entryEvEbitdaMultiple: VALUATION_DEFAULTS.entryEvEbitdaMultiple,
+    exitEvEbitdaMultiple: VALUATION_DEFAULTS.exitEvEbitdaMultiple,
+    seniorDebtEbitda: VALUATION_DEFAULTS.seniorDebtEbitda,
+    mezzDebtEbitda: VALUATION_DEFAULTS.mezzDebtEbitda,
 
-    // ========== 增長假設 ==========
-    revenueGrowthRate: 5,
-    ebitdaMargin: 25,
-    netMargin: 10,
+    // ========== 增長假設 (from GROWTH_DEFAULTS) ==========
+    revenueGrowthRate: GROWTH_DEFAULTS.revenueGrowthRate,
+    ebitdaMargin: GROWTH_DEFAULTS.ebitdaMargin,
+    netMargin: GROWTH_DEFAULTS.netMargin,
 
-    // ========== 成本結構假設 ==========
-    cogsAsPercentageOfRevenue: 60,
-    operatingExpensesAsPercentageOfRevenue: 15,
+    // ========== 成本結構假設 (from COST_STRUCTURE_DEFAULTS) ==========
+    cogsAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.cogsAsPercentageOfRevenue,
+    operatingExpensesAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.operatingExpensesAsPercentageOfRevenue,
 
-    // ========== 資本支出假設 ==========
-    capexAsPercentageOfRevenue: 4,
-    capexGrowthRate: 3,
+    // ========== 資本支出假設 (from CAPEX_DEFAULTS) ==========
+    capexAsPercentageOfRevenue: CAPEX_DEFAULTS.capexAsPercentageOfRevenue,
+    capexGrowthRate: CAPEX_DEFAULTS.capexGrowthRate,
 
-    // ========== 營運資本假設 ==========
-    accountsReceivableDays: 45,
-    inventoryDays: 60,
-    accountsPayableDays: 35,
+    // ========== 營運資本假設 (from WORKING_CAPITAL_DEFAULTS) ==========
+    accountsReceivableDays: WORKING_CAPITAL_DEFAULTS.accountsReceivableDays,
+    inventoryDays: WORKING_CAPITAL_DEFAULTS.inventoryDays,
+    accountsPayableDays: WORKING_CAPITAL_DEFAULTS.accountsPayableDays,
 
-    // ========== 其他財務假設 ==========
-    taxRate: 20,
-    discountRate: 10,
+    // ========== 其他財務假設 (from TAX_DISCOUNT_DEFAULTS) ==========
+    taxRate: TAX_DISCOUNT_DEFAULTS.taxRate,
+    discountRate: TAX_DISCOUNT_DEFAULTS.discountRate,
 
-    // ========== 計算參數設定 ==========
-    depreciationToCapexRatio: 20,
-    fixedAssetsToCapexMultiple: 10,
-    revolvingCreditRepaymentRate: 20,
+    // ========== 計算參數設定 (from CAPEX_DEFAULTS + DEBT_DEFAULTS) ==========
+    depreciationToCapexRatio: CAPEX_DEFAULTS.depreciationToCapexRatio,
+    fixedAssetsToCapexMultiple: CAPEX_DEFAULTS.fixedAssetsToCapexMultiple,
+    revolvingCreditRepaymentRate: DEBT_DEFAULTS.revolvingCreditRepaymentRate,
 
     // ========== 向後兼容欄位 ==========
-    capExPctSales: 4,
-    nwcPctSales: 15,
-    corporateTaxRate: 20,
+    capExPctSales: CAPEX_DEFAULTS.capexAsPercentageOfRevenue,
+    nwcPctSales: 15, // 營運資本佔營收比例（導出值）
+    corporateTaxRate: TAX_DISCOUNT_DEFAULTS.taxRate,
   };
 
-  // 根據情境類型調整參數
+  // 根據情境類型應用調整 (from SCENARIO_ADJUSTMENTS)
   switch (type) {
-    case 'upside':
+    case 'upside': {
+      const adj = SCENARIO_ADJUSTMENTS.upside;
+      const upsideCapex = CAPEX_DEFAULTS.capexAsPercentageOfRevenue - 0.5; // 樂觀情境資本支出較低
       return {
         ...baseValues,
-        // 情境參數
-        exitEvEbitdaMultiple: 14,
+        // 情境參數調整
+        exitEvEbitdaMultiple: VALUATION_DEFAULTS.exitEvEbitdaMultiple + adj.exitEvEbitdaMultiple,
         // 增長假設（樂觀）
-        revenueGrowthRate: 7,
-        ebitdaMargin: 28,
-        netMargin: 12,
+        revenueGrowthRate: GROWTH_DEFAULTS.revenueGrowthRate + adj.revenueGrowthRate,
+        ebitdaMargin: GROWTH_DEFAULTS.ebitdaMargin + adj.ebitdaMargin,
+        netMargin: GROWTH_DEFAULTS.netMargin + 2, // 淨利率同步上調
         // 成本結構（較低）
-        cogsAsPercentageOfRevenue: 58,
-        operatingExpensesAsPercentageOfRevenue: 14,
+        cogsAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.cogsAsPercentageOfRevenue + adj.cogsAdjustment,
+        operatingExpensesAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.operatingExpensesAsPercentageOfRevenue + adj.opexAdjustment,
         // 資本支出（較低）
-        capexAsPercentageOfRevenue: 3.5,
-        capExPctSales: 3.5,
+        capexAsPercentageOfRevenue: upsideCapex,
+        capExPctSales: upsideCapex,
         // 營運資本（更有效率）
-        accountsReceivableDays: 40,
-        inventoryDays: 55,
-        accountsPayableDays: 38,
+        accountsReceivableDays: WORKING_CAPITAL_DEFAULTS.accountsReceivableDays - 5,
+        inventoryDays: WORKING_CAPITAL_DEFAULTS.inventoryDays - 5,
+        accountsPayableDays: WORKING_CAPITAL_DEFAULTS.accountsPayableDays + 3,
         nwcPctSales: 14,
       };
-    case 'downside':
+    }
+    case 'downside': {
+      const adj = SCENARIO_ADJUSTMENTS.downside;
+      const downsideCapex = CAPEX_DEFAULTS.capexAsPercentageOfRevenue + 0.5; // 保守情境資本支出較高
       return {
         ...baseValues,
-        // 情境參數
-        exitEvEbitdaMultiple: 10,
+        // 情境參數調整
+        exitEvEbitdaMultiple: VALUATION_DEFAULTS.exitEvEbitdaMultiple + adj.exitEvEbitdaMultiple,
         // 增長假設（保守）
-        revenueGrowthRate: 3,
-        ebitdaMargin: 22,
-        netMargin: 8,
+        revenueGrowthRate: GROWTH_DEFAULTS.revenueGrowthRate + adj.revenueGrowthRate,
+        ebitdaMargin: GROWTH_DEFAULTS.ebitdaMargin + adj.ebitdaMargin,
+        netMargin: GROWTH_DEFAULTS.netMargin - 2, // 淨利率同步下調
         // 成本結構（較高）
-        cogsAsPercentageOfRevenue: 62,
-        operatingExpensesAsPercentageOfRevenue: 16,
+        cogsAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.cogsAsPercentageOfRevenue + adj.cogsAdjustment,
+        operatingExpensesAsPercentageOfRevenue: COST_STRUCTURE_DEFAULTS.operatingExpensesAsPercentageOfRevenue + adj.opexAdjustment,
         // 資本支出（較高）
-        capexAsPercentageOfRevenue: 4.5,
-        capExPctSales: 4.5,
+        capexAsPercentageOfRevenue: downsideCapex,
+        capExPctSales: downsideCapex,
         // 營運資本（較差）
-        accountsReceivableDays: 50,
-        inventoryDays: 65,
-        accountsPayableDays: 32,
+        accountsReceivableDays: WORKING_CAPITAL_DEFAULTS.accountsReceivableDays + 5,
+        inventoryDays: WORKING_CAPITAL_DEFAULTS.inventoryDays + 5,
+        accountsPayableDays: WORKING_CAPITAL_DEFAULTS.accountsPayableDays - 3,
         nwcPctSales: 16,
       };
+    }
     default:
       return baseValues;
   }

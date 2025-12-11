@@ -484,6 +484,7 @@ export interface IncomeStatementData {
   ebitda: number;
   depreciationAmortization: number;
   interestExpense: number;
+  deferredPaymentExpense?: number; // 資產收購遞延付款費用（Year 1+ 的付款視為費用）
   ebit: number;
   taxes: number;
   netIncome: number;
@@ -539,7 +540,8 @@ export interface CashFlowData {
   interestPaid?: number;
   capex?: number;
   transactionFeePaid?: number;
-  cashAcquisitionPayment?: number;
+  cashAcquisitionPayment?: number; // Year 0 頭期款（投資活動）
+  deferredPaymentExpense?: number; // Year 1+ 遞延付款（營運費用現金支付）
   nwcChange?: number;
   // 股利診斷資訊
   dividendDiagnostics?: DividendDiagnostics;

@@ -178,7 +178,9 @@ export function calculateLBO(input: CalculationInput): CalculationResult {
       input.businessMetrics,
       input.assumptions,
       input.planningHorizon,
-      debtSchedule
+      debtSchedule,
+      input.dealDesign,
+      input.scenario
     );
 
     // Step 4: 計算資產負債表

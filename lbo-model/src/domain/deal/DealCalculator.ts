@@ -19,7 +19,10 @@ export class DealCalculator {
 
   /**
    * 計算收購價格
-   * 簡化邏輯：購買價 = EV（無特殊案例）
+   * 購買價 = EV（不論交易類型）
+   *
+   * 注意：資產收購時，若只購買部分資產，差額會形成商譽
+   * 這反映的是賣方不會因為只賣部分資產就降價的商業現實
    */
   static calculatePurchasePrice(
     ebitdaInThousands: number,
@@ -27,9 +30,6 @@ export class DealCalculator {
     dealDesign?: MnaDealDesign
   ): number {
     const ev = this.calculateEnterpriseValue(ebitdaInThousands, scenario.entryEvEbitdaMultiple);
-    
-    // 簡化：購買價格 = EV
-    // 不管是資產交易還是股權收購，都使用 EV
     return ev;
   }
 
@@ -105,6 +105,77 @@ export class DealCalculator {
 
     const paymentPct = periodMap[year] || 0;
     return purchasePrice * (paymentPct / 100);
+  }
+
+  /**
+   * 計算頭期款金額（交割前/交割時的付款）
+   * 用於資產收購時的商譽計算
+   *
+   * @param purchasePrice - 總購買價格
+   * @param dealDesign - 交易設計
+   * @returns 頭期款金額
+   */
+  static calculateUpfrontPayment(
+    purchasePrice: number,
+    dealDesign: MnaDealDesign
+  ): number {
+    const schedule = dealDesign?.assetDealSettings?.paymentSchedule?.schedule || [];
+
+    if (schedule.length > 0) {
+      // 篩選交割前/交割時的現金付款
+      const upfrontPct = schedule
+        .filter((s) => {
+          if (s?.paymentMethod !== 'cash') return false;
+          const timing = s?.timing;
+          // 只計入 preClosing 和 closing
+          return timing === 'preClosing' || timing === 'closing';
+        })
+        .reduce((sum: number, s) => sum + (Number(s?.percentage) || 0), 0);
+      return purchasePrice * (upfrontPct / 100);
+    }
+
+    // Fallback：使用 paymentStructure 的 upfrontPayment
+    const ps = dealDesign?.paymentStructure || {};
+    const upfrontPct = Number(ps.upfrontPayment ?? 0);
+    return purchasePrice * (upfrontPct / 100);
+  }
+
+  /**
+   * 計算後續款項金額（Year 1+ 的付款，視為費用）
+   * 用於資產收購時的費用計算
+   *
+   * @param purchasePrice - 總購買價格
+   * @param year - 目標年份
+   * @param dealDesign - 交易設計
+   * @returns 該年度的後續款項金額
+   */
+  static calculateDeferredPaymentExpense(
+    purchasePrice: number,
+    year: number,
+    dealDesign: MnaDealDesign
+  ): number {
+    // 只有 Year 1+ 才有後續款項費用
+    if (year <= 0) return 0;
+
+    const schedule = dealDesign?.assetDealSettings?.paymentSchedule?.schedule || [];
+
+    if (schedule.length > 0) {
+      const deferredPct = schedule
+        .filter((s) => {
+          if (s?.paymentMethod !== 'cash') return false;
+          const itemYear = this.timingToYear(s?.timing);
+          // 只計入 Year 1+ 的付款
+          return itemYear === year && itemYear > 0;
+        })
+        .reduce((sum: number, s) => sum + (Number(s?.percentage) || 0), 0);
+      return purchasePrice * (deferredPct / 100);
+    }
+
+    // Fallback：使用 paymentStructure
+    const ps = dealDesign?.paymentStructure || {};
+    if (year === 1) return purchasePrice * (Number(ps.year1MilestonePayment ?? 0) / 100);
+    if (year === 2) return purchasePrice * (Number(ps.year2MilestonePayment ?? 0) / 100);
+    return 0;
   }
 
   /**
