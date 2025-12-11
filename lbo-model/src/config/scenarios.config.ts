@@ -5,46 +5,100 @@
 
 import { ScenarioAssumptions } from '../types/financial';
 
-// 預設場景配置值
-export const SCENARIO_DEFAULTS = {
+// 預設場景配置值（包含所有 ScenarioAssumptions 欄位）
+export const SCENARIO_DEFAULTS: Record<'base' | 'upper' | 'lower', ScenarioAssumptions> = {
   base: {
-    entryEvEbitdaMultiple: 3,  // 用戶要求的預設值，而非硬編碼的 10
+    // 情境參數
+    entryEvEbitdaMultiple: 3,  // 用戶要求的預設值
     exitEvEbitdaMultiple: 12,
     seniorDebtEbitda: 4,
     mezzDebtEbitda: 2,
-    cogsAsPercentageOfRevenue: 60,
-    operatingExpensesAsPercentageOfRevenue: 15,
+    // 增長假設
     revenueGrowthRate: 5,
     ebitdaMargin: 25,
     netMargin: 10,
+    // 成本結構
+    cogsAsPercentageOfRevenue: 60,
+    operatingExpensesAsPercentageOfRevenue: 15,
+    // 資本支出
+    capexAsPercentageOfRevenue: 4,
+    capexGrowthRate: 3,
+    // 營運資本
+    accountsReceivableDays: 45,
+    inventoryDays: 60,
+    accountsPayableDays: 35,
+    // 其他財務
+    taxRate: 20,
+    discountRate: 10,
+    // 計算參數
+    depreciationToCapexRatio: 20,
+    fixedAssetsToCapexMultiple: 10,
+    revolvingCreditRepaymentRate: 20,
+    // 向後兼容
     capExPctSales: 4,
     nwcPctSales: 15,
     corporateTaxRate: 20,
   },
   upper: {
-    entryEvEbitdaMultiple: 3,  // 用戶要求的預設值
+    // 情境參數
+    entryEvEbitdaMultiple: 3,
     exitEvEbitdaMultiple: 14,
     seniorDebtEbitda: 3.5,
     mezzDebtEbitda: 1.5,
-    cogsAsPercentageOfRevenue: 58,
-    operatingExpensesAsPercentageOfRevenue: 14,
+    // 增長假設（樂觀）
     revenueGrowthRate: 7,
     ebitdaMargin: 28,
     netMargin: 12,
+    // 成本結構（較低）
+    cogsAsPercentageOfRevenue: 58,
+    operatingExpensesAsPercentageOfRevenue: 14,
+    // 資本支出（較低）
+    capexAsPercentageOfRevenue: 3.5,
+    capexGrowthRate: 3,
+    // 營運資本（更有效率）
+    accountsReceivableDays: 40,
+    inventoryDays: 55,
+    accountsPayableDays: 38,
+    // 其他財務
+    taxRate: 20,
+    discountRate: 10,
+    // 計算參數
+    depreciationToCapexRatio: 20,
+    fixedAssetsToCapexMultiple: 10,
+    revolvingCreditRepaymentRate: 20,
+    // 向後兼容
     capExPctSales: 3.5,
     nwcPctSales: 14,
     corporateTaxRate: 20,
   },
   lower: {
-    entryEvEbitdaMultiple: 3,  // 用戶要求的預設值
+    // 情境參數
+    entryEvEbitdaMultiple: 3,
     exitEvEbitdaMultiple: 10,
     seniorDebtEbitda: 4.5,
     mezzDebtEbitda: 2.5,
-    cogsAsPercentageOfRevenue: 62,
-    operatingExpensesAsPercentageOfRevenue: 16,
+    // 增長假設（保守）
     revenueGrowthRate: 3,
     ebitdaMargin: 22,
     netMargin: 8,
+    // 成本結構（較高）
+    cogsAsPercentageOfRevenue: 62,
+    operatingExpensesAsPercentageOfRevenue: 16,
+    // 資本支出（較高）
+    capexAsPercentageOfRevenue: 4.5,
+    capexGrowthRate: 3,
+    // 營運資本（較差）
+    accountsReceivableDays: 50,
+    inventoryDays: 65,
+    accountsPayableDays: 32,
+    // 其他財務
+    taxRate: 20,
+    discountRate: 10,
+    // 計算參數
+    depreciationToCapexRatio: 20,
+    fixedAssetsToCapexMultiple: 10,
+    revolvingCreditRepaymentRate: 20,
+    // 向後兼容
     capExPctSales: 4.5,
     nwcPctSales: 16,
     corporateTaxRate: 20,

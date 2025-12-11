@@ -122,6 +122,19 @@ export const AssetDealSettingsSection: React.FC = React.memo(() => {
     }));
   };
 
+  const handleSpecialSharesChange = (field: string, value: string | boolean) => {
+    const numValue = typeof value === 'string' ? parseNumberInput(value) : value;
+    dispatch(updateDealDesign({
+      assetDealSettings: {
+        ...mnaDealDesign?.assetDealSettings!,
+        specialSharesDetails: {
+          ...mnaDealDesign?.assetDealSettings?.specialSharesDetails,
+          [field]: numValue
+        }
+      }
+    }));
+  };
+
   const settings = mnaDealDesign?.assetDealSettings;
 
   return (
@@ -187,14 +200,31 @@ export const AssetDealSettingsSection: React.FC = React.memo(() => {
           <Typography variant="subtitle2" gutterBottom>
             特別股設定
           </Typography>
-          <TextField
-            label="股息率 (%)"
-            type="number"
-            value={settings?.specialSharesDetails?.dividendRate || 8}
-            size="small"
-            sx={{ width: 150 }}
-            inputProps={{ min: 0, max: 20 }}
-          />
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            <TextField
+              label="股息率 (%)"
+              type="number"
+              value={settings?.specialSharesDetails?.dividendRate ?? 8}
+              onChange={(e) => handleSpecialSharesChange('dividendRate', e.target.value)}
+              size="small"
+              sx={{ width: 150 }}
+              inputProps={{ min: 0, max: 20, step: 0.5 }}
+              helperText="每年支付的股息率"
+            />
+            <TextField
+              label="贖回期間 (年)"
+              type="number"
+              value={settings?.specialSharesDetails?.redemptionPeriod ?? 5}
+              onChange={(e) => handleSpecialSharesChange('redemptionPeriod', e.target.value)}
+              size="small"
+              sx={{ width: 150 }}
+              inputProps={{ min: 1, max: 10 }}
+              helperText="特別股贖回年限"
+            />
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            特別股股息 = 期初特別股餘額 × 股息率（每年當期支付）
+          </Typography>
         </Box>
       )}
     </Box>

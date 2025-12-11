@@ -19,17 +19,15 @@ import {
   KPIMetrics
 } from './financial';
 
-// Scenario container types for mixed naming conventions
+// Scenario container types - unified naming
 export interface ScenariosContainer {
   base: ScenarioAssumptions;
-  upper?: ScenarioAssumptions;
-  lower?: ScenarioAssumptions;
-  upside?: ScenarioAssumptions;
-  downside?: ScenarioAssumptions;
+  upside: ScenarioAssumptions;
+  downside: ScenarioAssumptions;
   scenarios?: {
     base: ScenarioAssumptions;
-    upside?: ScenarioAssumptions;
-    downside?: ScenarioAssumptions;
+    upside: ScenarioAssumptions;
+    downside: ScenarioAssumptions;
   };
 }
 

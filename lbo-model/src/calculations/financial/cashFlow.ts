@@ -11,8 +11,164 @@ import {
   MnaDealDesign,
   ScenarioAssumptions,
   FutureAssumptions,
+  DebtProtectionCovenants,
+  WaterfallRule,
+  DividendTier,
 } from '../../types/financial';
 import { calculateTotalPrincipalRepayment } from './debtSchedule';
+import { DealCalculator } from '../../domain/deal/DealCalculator';
+
+/**
+ * 檢查所有債務保護條件（Covenant）
+ * 返回是否通過檢查及失敗的條件清單
+ */
+function checkAllCovenants(
+  income: IncomeStatementData,
+  balance: BalanceSheetData,
+  debtSchedule: DebtScheduleData[],
+  covenants: DebtProtectionCovenants | undefined,
+  year: number
+): { passed: boolean; failedCovenants: string[] } {
+  if (!covenants) return { passed: true, failedCovenants: [] };
+
+  const failedCovenants: string[] = [];
+
+  // 1. DSCR 檢查 (Debt Service Coverage Ratio)
+  if (covenants.dscr?.enabled) {
+    const yearDebtService = debtSchedule
+      .filter(d => d.year === year)
+      .reduce((sum, d) => sum + (d.interestExpense || 0) + (d.principalRepayment || 0), 0);
+    const dscr = yearDebtService > 0 ? (income.ebitda / yearDebtService) : Infinity;
+    if (dscr < covenants.dscr.value) {
+      failedCovenants.push('DSCR');
+    }
+  }
+
+  // 2. Net Leverage 檢查 (Debt / EBITDA)
+  if (covenants.netLeverage?.enabled) {
+    const netLeverage = income.ebitda > 0 ? ((balance.debt || 0) / income.ebitda) : Infinity;
+    if (netLeverage > covenants.netLeverage.value) {
+      failedCovenants.push('NetLeverage');
+    }
+  }
+
+  // 3. Interest Coverage 檢查 (EBITDA / Interest)
+  if (covenants.interestCoverage?.enabled) {
+    const intCov = (income.interestExpense || 0) > 0
+      ? (income.ebitda / income.interestExpense)
+      : Infinity;
+    if (intCov < covenants.interestCoverage.value) {
+      failedCovenants.push('InterestCoverage');
+    }
+  }
+
+  // 4. Min Cash Months 檢查
+  if (covenants.minCashMonths?.enabled) {
+    const monthlyOpex = Math.max(0, (income.revenue - income.ebitda)) / 12;
+    const cashMonths = monthlyOpex > 0 ? ((balance.cash || 0) / monthlyOpex) : Infinity;
+    if (cashMonths < covenants.minCashMonths.value) {
+      failedCovenants.push('MinCashMonths');
+    }
+  }
+
+  return { passed: failedCovenants.length === 0, failedCovenants };
+}
+
+/**
+ * 應用瀑布式分配邏輯
+ * 按優先級順序分配可用現金
+ */
+function applyWaterfallDistribution(
+  availableCash: number,
+  waterfallRules: WaterfallRule[],
+  preferredOutstanding: number,
+  preferredRate: number
+): { preferredRedemption: number; preferredDividend: number; commonDividend: number } {
+  // 無規則時，全部作為普通股利
+  if (!waterfallRules || waterfallRules.length === 0) {
+    return { preferredRedemption: 0, preferredDividend: 0, commonDividend: availableCash };
+  }
+
+  let remaining = availableCash;
+  const result = { preferredRedemption: 0, preferredDividend: 0, commonDividend: 0 };
+
+  // 按優先級排序
+  const sorted = [...waterfallRules].sort((a, b) => a.priority - b.priority);
+
+  for (const rule of sorted) {
+    if (remaining <= 0) break;
+
+    let amount = 0;
+    switch (rule.calculation) {
+      case 'fixed':
+        // 固定金額（UI 以百萬元為單位，轉換為仟元）
+        amount = Math.min(rule.value * 1000, remaining);
+        break;
+      case 'percentage':
+        // 百分比分配
+        amount = remaining * (rule.value / 100);
+        break;
+      case 'formula':
+        // 公式計算（目前僅支援優先股股息）
+        if (rule.type === 'preferredDividend') {
+          amount = Math.min(preferredOutstanding * (preferredRate / 100), remaining);
+        }
+        break;
+    }
+
+    // 分配到對應類型
+    switch (rule.type) {
+      case 'preferredRedemption':
+        result.preferredRedemption += amount;
+        break;
+      case 'preferredDividend':
+        result.preferredDividend += amount;
+        break;
+      case 'commonDividend':
+        result.commonDividend += amount;
+        break;
+      // 'carried' 類型暫不處理
+    }
+
+    remaining -= amount;
+  }
+
+  return result;
+}
+
+/**
+ * 選擇適用的分級觸發層級
+ * 返回適用的 payoutRatio
+ */
+function selectApplicableTier(
+  tiers: DividendTier[] | undefined,
+  ebitda: number,
+  fcff: number,
+  leverage: number
+): number {
+  // 無層級設定時，預設 50%
+  if (!tiers || !Array.isArray(tiers) || tiers.length === 0) {
+    return 0.5;
+  }
+
+  // 由高 payoutRatio 到低檢查，找到第一個符合的層級
+  const applicable = [...tiers]
+    .sort((a, b) => (b.payoutRatio || 0) - (a.payoutRatio || 0))
+    .find(t => {
+      const okEbitda = ebitda >= ((t.ebitdaThreshold || 0) * 1000); // UI 百萬元 → 仟元
+      const okFcff = fcff >= ((t.fcffThreshold || 0) * 1000);
+      const okLev = leverage <= (t.leverageThreshold || Infinity);
+      return okEbitda && okFcff && okLev;
+    });
+
+  if (applicable && typeof applicable.payoutRatio === 'number') {
+    return Math.max(0, Math.min(1, applicable.payoutRatio / 100));
+  }
+
+  // 無符合層級時，使用最低層級作為 fallback（而非 0）
+  const lowest = [...tiers].sort((a, b) => (a.payoutRatio || 0) - (b.payoutRatio || 0))[0];
+  return Math.max(0, Math.min(1, (lowest?.payoutRatio || 30) / 100));
+}
 
 /**
  * 計算併購方優先股股息
@@ -23,13 +179,20 @@ function calculateAcquirerPreferredDividends(
   year: number
 ): number {
   const equityInjections = dealDesign?.equityInjections || [];
-  
+
   // 篩選優先股類型的注入且已進入的
+  // 考慮 entryTimingType：'end' 表示期末投入，股息從下一年開始
   const preferredInjections = equityInjections.filter(
-    (inj) => 
-      inj.type === 'preferred' && 
-      inj.entryTiming <= year &&
-      (inj.dividendRate || 0) > 0
+    (inj) => {
+      if (inj.type !== 'preferred' || (inj.dividendRate || 0) <= 0) {
+        return false;
+      }
+      // 計算股息開始年份：期末投入則下一年開始，期初投入則當年開始
+      const dividendStartYear = inj.entryTimingType === 'end'
+        ? inj.entryTiming + 1
+        : inj.entryTiming;
+      return dividendStartYear <= year;
+    }
   );
   
   let totalDividend = 0;
@@ -111,8 +274,8 @@ function calculateTransactionFeePayment(
   year: number,
   baseEbitda: number
 ): number {
-  const enterpriseValue = baseEbitda * scenario.entryEvEbitdaMultiple;
-  const totalFee = enterpriseValue * (dealDesign.transactionFeePercentage || 0) / 100;
+  const purchasePrice = DealCalculator.calculatePurchasePrice(baseEbitda, scenario, dealDesign);
+  const totalFee = DealCalculator.calculateTransactionFees(purchasePrice, dealDesign.transactionFeePercentage || 2);
   
   if (!dealDesign.transactionFeePaymentSchedule) {
     // 預設 Year 0 全額支付
@@ -172,9 +335,8 @@ export function calculateCashFlow(
   // 計算特別股發行（注意：特別股是負債形式，但不影響現金流入）
   const preferredStockIssuance = balanceSheets[0].preferredStock || 0;
   
-  // 計算購買價格：股權收購用 EV；資產收購用選定資產價值
-  const evPrice = baseEbitda * (scenario.entryEvEbitdaMultiple);
-  const purchasePrice = evPrice; // 交易價一律以 EV 為準
+  // 計算購買價格：統一使用 DealCalculator
+  const purchasePrice = DealCalculator.calculatePurchasePrice(baseEbitda, scenario, dealDesign);
 
   // 付款時程：以 paymentSchedule 為準；若未設定，回退到 paymentStructure
   const dealWithSettings = dealDesign as MnaDealDesign & {
@@ -192,23 +354,8 @@ export function calculateCashFlow(
       tiers?: unknown[];
     };
   };
-  const schedule = dealWithSettings?.assetDealSettings?.paymentSchedule?.schedule || [];
   const getCashPaymentForPeriod = (period: number) => {
-    if (Array.isArray(schedule) && schedule.length > 0) {
-      const pct = schedule
-        .filter((s) => s?.paymentMethod === 'cash' && Number(s?.period) === period)
-        .reduce((sum: number, s) => sum + (Number(s?.percentage) || 0), 0);
-      return purchasePrice * (pct / 100);
-    }
-    // fallback：使用 paymentStructure（upfront=期1，year1=期2，year2=期3）
-    const ps = dealWithSettings?.paymentStructure || {};
-    const map: Record<number, number> = {
-      1: Number(ps.upfrontPayment ?? 0),
-      2: Number(ps.year1MilestonePayment ?? 0),
-      3: Number(ps.year2MilestonePayment ?? 0),
-    };
-    const pct = map[period] || 0;
-    return purchasePrice * (pct / 100);
+    return DealCalculator.calculatePaymentAmount(purchasePrice, period, dealDesign);
   };
   
   // Year 0 現金流計算：扣期1（期末）的現金支付與當期交易費
@@ -219,8 +366,9 @@ export function calculateCashFlow(
   const year0FinancingCashFlow = initialDebt + initialEquity; // 特別股發行為非現金，不計入現金流
   const year0NetCashFlow = year0OperatingCashFlow + year0InvestingCashFlow + year0FinancingCashFlow;
   
-  // 正確計算 Year 0 期末現金
-  const year0BeginningCash = balanceSheets[0].cash;
+  // 修正 Year 0 現金計算 - LBO 交易後新公司期初現金為 0
+  // 被收購公司的現金已包含在收購價格中，不應重複計算
+  const year0BeginningCash = 0; // LBO 交易期初現金為 0
   const year0EndingCash = year0BeginningCash + year0NetCashFlow;
   
   // 更新資產負債表的 Year 0 現金（修復現金計算問題）
@@ -313,7 +461,7 @@ export function calculateCashFlow(
     
     // 計算特別股贖回
     let preferredStockRedemption = 0;
-    const ev = incomeStatements[0].ebitda * scenario.entryEvEbitdaMultiple;
+    const ev = DealCalculator.calculateEnterpriseValue(incomeStatements[0].ebitda, scenario.entryEvEbitdaMultiple);
     const schedule = dealDesign?.assetDealSettings?.paymentSchedule?.schedule || [];
     const mapTimingToYear = (item: typeof schedule[0]): number | null => {
       if (!item) return null;
@@ -361,43 +509,66 @@ export function calculateCashFlow(
       newEquity,
       preferredDividend
     );
-    // 依「最低現金月數」與「分級配比」設定，計算普通股利以維持最低現金保留
+    // 依「債務保護條件」、「分級配比」、「瀑布分配」設定計算普通股利
     const covenants = dealWithSettings?.dividendPolicySettings?.covenants;
-    const minCashMonthsEnabled = !!covenants?.minCashMonths?.enabled;
-    const minCashMonths = Number(covenants?.minCashMonths?.value ?? 0);
-    const tiers = dealWithSettings?.dividendPolicySettings?.tiers || [];
+    const tiers = dealWithSettings?.dividendPolicySettings?.tiers;
+    const waterfallRules = dealWithSettings?.dividendPolicySettings?.waterfallRules;
 
     const beginningCash = previousCashFlow.endingCash;
     const netCashFlowBeforeCommon = operatingCashFlow + investingCashFlow + financingCashFlowBeforeCommon;
     const endingCashBeforeCommon = beginningCash + netCashFlowBeforeCommon;
 
+    // 計算最低現金保留（基於 minCashMonths covenant）
     const operatingExpenses = Math.max(0, (income.revenue || 0) - (income.ebitda || 0));
     const monthlyOperatingExpenses = operatingExpenses / 12;
-    const minimumCashReserve = minCashMonthsEnabled ? (monthlyOperatingExpenses * minCashMonths) : 0;
+    const minCashMonths = covenants?.minCashMonths?.enabled ? (covenants.minCashMonths.value || 0) : 0;
+    const minimumCashReserve = monthlyOperatingExpenses * minCashMonths;
 
     // 計算 FCFF（簡化：OCF - CapEx，不含債務與特股影響）
     const fcff = operatingCashFlow - capex;
 
-    // 選擇適用層級的 payoutRatio（若 tiers 未設定則預設 50%）
-    let payoutRatio = Array.isArray(tiers) && tiers.length > 0 ? 0 : 0.5; // 有tiers但無符合則0%，否則預設50%
-    if (Array.isArray(tiers) && tiers.length > 0) {
-      // 由高到低檢查門檻，符合者採用
-      const leverage = (income.ebitda || 0) > 0 ? ((balanceSheets[year]?.debt || 0) / (income.ebitda || 1)) : Infinity;
-      const applicable = [...tiers].reverse().find((t) => {
-        const ebitdaThresholdK = (Number(t.ebitdaThreshold) || 0) * 1000; // UI以百萬元，模型以仟元
-        const fcffThresholdK = (Number(t.fcffThreshold) || 0) * 1000;     // UI以百萬元，模型以仟元
-        const okEbitda = (income.ebitda || 0) >= ebitdaThresholdK;
-        const okFcff = fcff >= fcffThresholdK;
-        const okLev = leverage <= (Number(t.leverageThreshold) || Infinity);
-        return okEbitda && okFcff && okLev;
-      });
-      if (applicable && typeof applicable.payoutRatio === 'number') {
-        payoutRatio = Math.max(0, Math.min(1, applicable.payoutRatio / 100));
+    // Step 1: 檢查所有 Covenant 是否通過
+    const covenantCheck = checkAllCovenants(
+      income,
+      balanceSheets[year] || {} as BalanceSheetData,
+      debtSchedule,
+      covenants,
+      year
+    );
+
+    // Step 2: 計算槓桿比率（用於 Tier 選擇）
+    const leverage = (income.ebitda || 0) > 0
+      ? ((balanceSheets[year]?.debt || 0) / income.ebitda)
+      : Infinity;
+
+    // Step 3: 選擇適用的 Tier 取得 payoutRatio
+    const payoutRatio = selectApplicableTier(tiers, income.ebitda || 0, fcff, leverage);
+
+    // Step 4: 計算可分配金額
+    const availableForCommon = Math.max(0, endingCashBeforeCommon - minimumCashReserve);
+
+    // Step 5: 根據 Covenant 結果與 Waterfall 規則分配
+    // 取得優先股股息率（用於 Waterfall 計算）
+    const waterfallPreferredRate = Number(dealWithSettings?.assetDealSettings?.specialSharesDetails?.dividendRate ?? 8);
+
+    let commonDividend = 0;
+    if (covenantCheck.passed) {
+      // Covenant 通過，檢查是否有 Waterfall 規則
+      if (waterfallRules && waterfallRules.length > 0) {
+        // 使用 Waterfall 分配（注意：優先股贖回和股息已在前面處理，這裡只處理普通股利）
+        const dist = applyWaterfallDistribution(
+          availableForCommon,
+          waterfallRules,
+          balanceSheets[year]?.preferredStock || 0,
+          waterfallPreferredRate
+        );
+        commonDividend = dist.commonDividend;
+      } else {
+        // 無 Waterfall 規則，使用 Tier payoutRatio
+        commonDividend = availableForCommon * payoutRatio;
       }
     }
-
-    const availableForCommon = Math.max(0, endingCashBeforeCommon - minimumCashReserve);
-    const commonDividend = availableForCommon * payoutRatio;
+    // Covenant 違規時 commonDividend = 0（不分配普通股利）
 
     // 將普通股利納入融資現金流（作為現金流出）
     const financingCashFlow = financingCashFlowBeforeCommon - commonDividend;

@@ -11,6 +11,7 @@ import {
   useCurrentScenario 
 } from '../../../../hooks/typed-hooks';
 import { FinancingPlan, EquityInjection } from '../../../../types/financial';
+import { DealCalculator } from '../../../../domain/deal/DealCalculator';
 
 export interface SourceItem {
   name: string;
@@ -44,9 +45,12 @@ export function useSourcesUsesCalculations() {
   const currentScenario = scenarios[currentScenarioKey];
 
   return useMemo(() => {
-    // 企業價值計算
-    const enterpriseValue = (businessMetrics?.ebitda || 0) / 1000 * 
-                          (currentScenario?.entryEvEbitdaMultiple || 0);
+    // 企業價值計算（統一使用 DealCalculator，並轉換為百萬元顯示）
+    const enterpriseValueK = DealCalculator.calculateEnterpriseValue(
+      businessMetrics?.ebitda || 0, 
+      currentScenario?.entryEvEbitdaMultiple || 0
+    );
+    const enterpriseValue = DealCalculator.toMillions(enterpriseValueK);
 
     // 資金來源計算
     const debtFinancing = mnaDealDesign?.financingPlans?.reduce(
@@ -72,7 +76,14 @@ export function useSourcesUsesCalculations() {
 
     const baseUses = purchasePrice + transactionFees + workingCapitalAdjustment;
     const cashForOperations = Math.max(0, totalSources - baseUses);
-    const totalUses = totalSources; // 確保平衡
+    
+    // 平衡檢查：如果資金不足，警告並顯示缺口
+    if (totalSources < baseUses) {
+      const fundingGap = baseUses - totalSources;
+      console.warn(`⚠️ 資金缺口警告: ${fundingGap.toFixed(1)} 百萬，需要增加融資或降低收購價格`);
+    }
+    
+    const totalUses = totalSources; // 確保 UI 顯示平衡
 
     // 構建資金來源結構
     const sources: SourceCategory[] = [

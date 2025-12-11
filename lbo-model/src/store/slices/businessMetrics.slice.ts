@@ -10,10 +10,10 @@ import { BusinessMetricsBeforeAcquisition } from '../../types/financial';
 
 // 基礎數值定義（避免硬編碼）
 const baseRevenue = 372786; // 營收 (仟元)
-const initialCogs = 342000; // COGS 初始值 (仟元)
+const initialCogs = Math.round(baseRevenue * 0.65); // COGS 65% of revenue (仟元)
 const initialGrossProfit = baseRevenue - initialCogs; // 毛利 = 營收 - COGS
 const grossMarginRatio = initialGrossProfit / baseRevenue; // 毛利率
-const operatingExpensesRatio = 0.255; // 營業費用預設比例 (25.5% of revenue)
+const operatingExpensesRatio = 0.15; // 營業費用預設比例 (15% of revenue)
 
 // 計算初始值
 const initialOperatingExpenses = baseRevenue * operatingExpensesRatio;

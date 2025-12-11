@@ -36,6 +36,7 @@ import {
   WaterfallRule,
 } from '../../../types/financial';
 import { useProFormaData } from '../../../hooks/useProFormaData';
+import { createDefaultDividendPolicySettings } from '../../../constants/dividendPolicyDefaults';
 
 const DividendPolicyTable: React.FC = () => {
   const dispatch = useDispatch();
@@ -56,39 +57,15 @@ const DividendPolicyTable: React.FC = () => {
   const preferredEquity = mnaDealDesign.equityInjections.find(e => e.type === 'preferred');
   const preferredRate = preferredEquity?.dividendRate || 0; // 不提供預設值
 
-  // 初始化股利政策設定
+  // 初始化股利政策設定（使用統一預設值）
   const [policySettings, setPolicySettings] = useState<DividendPolicySettings>(() => {
     // 檢查是否已有保存的設定
     const existingPolicy = mnaDealDesign.dividendPolicySettings;
     if (existingPolicy) {
       return existingPolicy;
     }
-
-    // 默認設定
-    return {
-      id: `policy-${Date.now()}`,
-      name: 'LBO標準分紅政策',
-      covenants: {
-        dscr: { value: 1.25, enabled: true },
-        netLeverage: { value: 4.0, enabled: true },
-        interestCoverage: { value: 3.0, enabled: true },
-        minCashMonths: { value: 3, enabled: true },
-      },
-      tiers: [],
-      waterfallRules: [],
-      timing: {
-        frequency: 'annual',
-        evaluationDate: 'Q4+45',
-        paymentDate: 'Q2-end',
-      },
-      redemptionStrategy: {
-        year1: 0,
-        year2: 0,
-        year3: 20,
-        year4: 30,
-        year5: 50,
-      },
-    };
+    // 使用統一預設值
+    return createDefaultDividendPolicySettings(preferredRate);
   });
 
   const [expandedPanel, setExpandedPanel] = useState<string | false>('covenants');

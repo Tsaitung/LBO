@@ -65,10 +65,26 @@ export interface FinancingPlanState {
 }
 
 export interface ScenariosState {
-  current: 'base' | 'upper' | 'lower';
-  base: ScenarioAssumptions;
-  upper: ScenarioAssumptions;
-  lower: ScenarioAssumptions;
+  current: 'base' | 'upside' | 'downside';
+  scenarios: {
+    base: ScenarioAssumptions;
+    upside: ScenarioAssumptions;
+    downside: ScenarioAssumptions;
+  };
+  sensitivityAnalysis?: {
+    parameter: string;
+    values: number[];
+    results: Array<{
+      value: number;
+      irr: number;
+      npm: number;
+      payback: number;
+    }>;
+  };
+  comparison?: {
+    enabled: boolean;
+    scenarios: Array<'base' | 'upside' | 'downside'>;
+  };
   calculatedResults?: ProFormaDataItem[];
 }
 
@@ -127,9 +143,13 @@ export const getFinancingPlans = (state: AppRootState): FinancingPlan[] => {
   return state.lbo.financingPlans;
 };
 
-export const getCurrentScenario = (state: AppRootState): 'base' | 'upper' | 'lower' => {
+export const getCurrentScenario = (state: AppRootState): 'base' | 'upside' | 'downside' => {
   if (isModularState(state)) {
     return state.scenarios.current;
   }
-  return state.lbo.currentScenario;
+  // Legacy 使用 upper/lower，需要映射
+  const legacy = state.lbo.currentScenario;
+  if (legacy === 'upper') return 'upside';
+  if (legacy === 'lower') return 'downside';
+  return 'base';
 };

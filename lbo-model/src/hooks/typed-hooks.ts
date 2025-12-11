@@ -17,10 +17,10 @@ import {
   ScenariosContainer,
   CalculationInput,
   CalculationResults,
-  ScenarioKey,
+  ScenarioKeyModular,
   DealDesignWithPlans
 } from '../types/hooks.types';
-import { ScenarioAssumptions } from '../types/financial';
+import { ScenarioAssumptions, FutureAssumptions } from '../types/financial';
 import {
   IncomeStatementData,
   BalanceSheetData,
@@ -76,15 +76,59 @@ export const useBusinessMetrics = () => {
   );
 };
 
-export const useFutureAssumptions = () => {
-  return useSmartSelector(
-    (state) => state.lbo.futureAssumptions,
-    (state) => state.assumptions
-  );
+/**
+ * 從當前情境取得完整假設（ScenarioAssumptions 格式）
+ */
+export const useScenarioAssumptions = (): ScenarioAssumptions => {
+  return useAppSelector((state) => {
+    const modularState = state as ModularRootState;
+    const current = modularState.scenarios.current;
+    return modularState.scenarios.scenarios[current];
+  });
+};
+
+/**
+ * 從當前情境取得假設（轉換為 FutureAssumptions 格式）
+ * 用於計算層兼容
+ */
+export const useFutureAssumptions = (): FutureAssumptions => {
+  return useAppSelector((state) => {
+    const modularState = state as ModularRootState;
+    const scenario = modularState.scenarios.scenarios[modularState.scenarios.current];
+    return {
+      // 增長假設
+      revenueGrowthRate: scenario.revenueGrowthRate,
+      ebitdaMargin: scenario.ebitdaMargin,
+      netMargin: scenario.netMargin,
+      // 成本結構
+      cogsAsPercentageOfRevenue: scenario.cogsAsPercentageOfRevenue,
+      operatingExpensesAsPercentageOfRevenue: scenario.operatingExpensesAsPercentageOfRevenue,
+      // 資本支出
+      capexAsPercentageOfRevenue: scenario.capexAsPercentageOfRevenue,
+      capexGrowthRate: scenario.capexGrowthRate,
+      // 營運資本
+      accountsReceivableDays: scenario.accountsReceivableDays,
+      inventoryDays: scenario.inventoryDays,
+      accountsPayableDays: scenario.accountsPayableDays,
+      // 其他
+      taxRate: scenario.taxRate,
+      discountRate: scenario.discountRate,
+      // 計算參數
+      depreciationToCapexRatio: scenario.depreciationToCapexRatio,
+      fixedAssetsToCapexMultiple: scenario.fixedAssetsToCapexMultiple,
+      revolvingCreditRepaymentRate: scenario.revolvingCreditRepaymentRate,
+    };
+  });
 };
 
 // Alias for legacy naming
 export const useAssumptions = () => useFutureAssumptions();
+
+/**
+ * 從當前情境取得假設（直接使用 ScenarioAssumptions）
+ * 新組件應使用此 hook
+ */
+export const useActiveAssumptions = useScenarioAssumptions;
 
 export const useMnaDealDesign = () => {
   return useSmartSelector(
@@ -103,14 +147,17 @@ export const useFinancingPlans = () => {
   );
 };
 
-export const useCurrentScenario = (): ScenarioKey => {
+export const useCurrentScenario = (): ScenarioKeyModular => {
   return useSmartSelector(
-    (state) => state.lbo.currentScenario,
+    (state) => {
+      const cur = state.lbo.currentScenario as string;
+      if (cur === 'upper') return 'upside';
+      if (cur === 'lower') return 'downside';
+      return cur as ScenarioKeyModular; // 'base'
+    },
     (state) => {
       const cur = state.scenarios.current as string;
-      if (cur === 'upside') return 'upper';
-      if (cur === 'downside') return 'lower';
-      return cur as ScenarioKey; // 'base'
+      return cur as ScenarioKeyModular; // 'base', 'upside', 'downside'
     }
   );
 };
@@ -122,8 +169,8 @@ export const useScenarios = (): ScenariosContainer => {
       const legacyScenarios = state.lbo.scenarios;
       return {
         base: legacyScenarios.base,
-        upper: legacyScenarios.upper,
-        lower: legacyScenarios.lower,
+        upside: legacyScenarios.upper,
+        downside: legacyScenarios.lower,
       } as ScenariosContainer;
     },
     (state) => {
@@ -141,8 +188,8 @@ export const useScenarios = (): ScenariosContainer => {
       const scenarios = s?.scenarios || {};
       return {
         base: scenarios.base || s?.base || {} as ScenarioAssumptions,
-        upper: scenarios.upside || s?.upside,
-        lower: scenarios.downside || s?.downside,
+        upside: scenarios.upside || s?.upside,
+        downside: scenarios.downside || s?.downside,
       } as ScenariosContainer;
     }
   );

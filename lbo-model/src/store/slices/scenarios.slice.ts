@@ -5,7 +5,7 @@
  */
 
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { ScenarioAssumptions } from '../../types/financial';
+import { ScenarioAssumptions, FutureAssumptions } from '../../types/financial';
 
 // 情境類型
 export type ScenarioType = 'base' | 'upside' | 'downside';
@@ -34,47 +34,90 @@ interface ScenariosState {
   };
 }
 
-// 創建預設情境
+// 創建預設情境（包含所有假設欄位）
 function createDefaultScenario(type: ScenarioType): ScenarioAssumptions {
-  const baseValues = {
+  const baseValues: ScenarioAssumptions = {
+    // ========== 情境特有參數 ==========
     entryEvEbitdaMultiple: 10,
     exitEvEbitdaMultiple: 12,
     seniorDebtEbitda: 4,
     mezzDebtEbitda: 2,
-    cogsAsPercentageOfRevenue: 60,
-    operatingExpensesAsPercentageOfRevenue: 15,
+
+    // ========== 增長假設 ==========
     revenueGrowthRate: 5,
     ebitdaMargin: 25,
     netMargin: 10,
+
+    // ========== 成本結構假設 ==========
+    cogsAsPercentageOfRevenue: 60,
+    operatingExpensesAsPercentageOfRevenue: 15,
+
+    // ========== 資本支出假設 ==========
+    capexAsPercentageOfRevenue: 4,
+    capexGrowthRate: 3,
+
+    // ========== 營運資本假設 ==========
+    accountsReceivableDays: 45,
+    inventoryDays: 60,
+    accountsPayableDays: 35,
+
+    // ========== 其他財務假設 ==========
+    taxRate: 20,
+    discountRate: 10,
+
+    // ========== 計算參數設定 ==========
+    depreciationToCapexRatio: 20,
+    fixedAssetsToCapexMultiple: 10,
+    revolvingCreditRepaymentRate: 20,
+
+    // ========== 向後兼容欄位 ==========
     capExPctSales: 4,
     nwcPctSales: 15,
     corporateTaxRate: 20,
   };
-  
+
   // 根據情境類型調整參數
   switch (type) {
     case 'upside':
       return {
         ...baseValues,
+        // 情境參數
         exitEvEbitdaMultiple: 14,
-        cogsAsPercentageOfRevenue: 58,
-        operatingExpensesAsPercentageOfRevenue: 14,
+        // 增長假設（樂觀）
         revenueGrowthRate: 7,
         ebitdaMargin: 28,
         netMargin: 12,
+        // 成本結構（較低）
+        cogsAsPercentageOfRevenue: 58,
+        operatingExpensesAsPercentageOfRevenue: 14,
+        // 資本支出（較低）
+        capexAsPercentageOfRevenue: 3.5,
         capExPctSales: 3.5,
+        // 營運資本（更有效率）
+        accountsReceivableDays: 40,
+        inventoryDays: 55,
+        accountsPayableDays: 38,
         nwcPctSales: 14,
       };
     case 'downside':
       return {
         ...baseValues,
+        // 情境參數
         exitEvEbitdaMultiple: 10,
-        cogsAsPercentageOfRevenue: 62,
-        operatingExpensesAsPercentageOfRevenue: 16,
+        // 增長假設（保守）
         revenueGrowthRate: 3,
         ebitdaMargin: 22,
         netMargin: 8,
+        // 成本結構（較高）
+        cogsAsPercentageOfRevenue: 62,
+        operatingExpensesAsPercentageOfRevenue: 16,
+        // 資本支出（較高）
+        capexAsPercentageOfRevenue: 4.5,
         capExPctSales: 4.5,
+        // 營運資本（較差）
+        accountsReceivableDays: 50,
+        inventoryDays: 65,
+        accountsPayableDays: 32,
         nwcPctSales: 16,
       };
     default:
@@ -246,6 +289,113 @@ const scenariosSlice = createSlice({
     
     // 重置整個狀態
     resetScenariosState: () => initialState,
+
+    // ========== 分類更新 Actions（用於 Tab UI） ==========
+
+    // 更新增長假設
+    updateGrowthAssumptions: (
+      state,
+      action: PayloadAction<{
+        scenario: ScenarioType;
+        updates: Partial<Pick<ScenarioAssumptions,
+          'revenueGrowthRate' | 'ebitdaMargin' | 'netMargin'>>;
+      }>
+    ) => {
+      ensureScenarioContainer(state as ScenariosState & Partial<Record<'base' | 'upside' | 'downside' | 'upper' | 'lower', ScenarioAssumptions>>);
+      const { scenario, updates } = action.payload;
+      Object.assign(state.scenarios[scenario], updates);
+    },
+
+    // 更新成本結構假設
+    updateCostStructure: (
+      state,
+      action: PayloadAction<{
+        scenario: ScenarioType;
+        updates: Partial<Pick<ScenarioAssumptions,
+          'cogsAsPercentageOfRevenue' | 'operatingExpensesAsPercentageOfRevenue'>>;
+      }>
+    ) => {
+      ensureScenarioContainer(state as ScenariosState & Partial<Record<'base' | 'upside' | 'downside' | 'upper' | 'lower', ScenarioAssumptions>>);
+      const { scenario, updates } = action.payload;
+      Object.assign(state.scenarios[scenario], updates);
+    },
+
+    // 更新資本支出假設
+    updateCapexAssumptions: (
+      state,
+      action: PayloadAction<{
+        scenario: ScenarioType;
+        updates: Partial<Pick<ScenarioAssumptions,
+          'capexAsPercentageOfRevenue' | 'capexGrowthRate'>>;
+      }>
+    ) => {
+      ensureScenarioContainer(state as ScenariosState & Partial<Record<'base' | 'upside' | 'downside' | 'upper' | 'lower', ScenarioAssumptions>>);
+      const { scenario, updates } = action.payload;
+      Object.assign(state.scenarios[scenario], updates);
+      // 同步向後兼容欄位
+      if (updates.capexAsPercentageOfRevenue !== undefined) {
+        state.scenarios[scenario].capExPctSales = updates.capexAsPercentageOfRevenue;
+      }
+    },
+
+    // 更新營運資本假設
+    updateWorkingCapitalAssumptions: (
+      state,
+      action: PayloadAction<{
+        scenario: ScenarioType;
+        updates: Partial<Pick<ScenarioAssumptions,
+          'accountsReceivableDays' | 'inventoryDays' | 'accountsPayableDays'>>;
+      }>
+    ) => {
+      ensureScenarioContainer(state as ScenariosState & Partial<Record<'base' | 'upside' | 'downside' | 'upper' | 'lower', ScenarioAssumptions>>);
+      const { scenario, updates } = action.payload;
+      Object.assign(state.scenarios[scenario], updates);
+    },
+
+    // 更新其他財務假設
+    updateOtherAssumptions: (
+      state,
+      action: PayloadAction<{
+        scenario: ScenarioType;
+        updates: Partial<Pick<ScenarioAssumptions,
+          'taxRate' | 'discountRate'>>;
+      }>
+    ) => {
+      ensureScenarioContainer(state as ScenariosState & Partial<Record<'base' | 'upside' | 'downside' | 'upper' | 'lower', ScenarioAssumptions>>);
+      const { scenario, updates } = action.payload;
+      Object.assign(state.scenarios[scenario], updates);
+      // 同步向後兼容欄位
+      if (updates.taxRate !== undefined) {
+        state.scenarios[scenario].corporateTaxRate = updates.taxRate;
+      }
+    },
+
+    // 更新計算參數
+    updateCalculationParameters: (
+      state,
+      action: PayloadAction<{
+        scenario: ScenarioType;
+        updates: Partial<Pick<ScenarioAssumptions,
+          'depreciationToCapexRatio' | 'fixedAssetsToCapexMultiple' | 'revolvingCreditRepaymentRate'>>;
+      }>
+    ) => {
+      ensureScenarioContainer(state as ScenariosState & Partial<Record<'base' | 'upside' | 'downside' | 'upper' | 'lower', ScenarioAssumptions>>);
+      const { scenario, updates } = action.payload;
+      Object.assign(state.scenarios[scenario], updates);
+    },
+
+    // 批量更新所有情境的計算參數（共用參數）
+    updateAllCalculationParameters: (
+      state,
+      action: PayloadAction<Partial<Pick<ScenarioAssumptions,
+        'depreciationToCapexRatio' | 'fixedAssetsToCapexMultiple' | 'revolvingCreditRepaymentRate'>>>
+    ) => {
+      ensureScenarioContainer(state as ScenariosState & Partial<Record<'base' | 'upside' | 'downside' | 'upper' | 'lower', ScenarioAssumptions>>);
+      const updates = action.payload;
+      (['base', 'upside', 'downside'] as ScenarioType[]).forEach(scenario => {
+        Object.assign(state.scenarios[scenario], updates);
+      });
+    },
   },
 });
 
@@ -266,6 +416,14 @@ export const {
   applyExitMultipleAdjustment,
   resetAllScenarios,
   resetScenariosState,
+  // 分類更新 actions
+  updateGrowthAssumptions,
+  updateCostStructure,
+  updateCapexAssumptions,
+  updateWorkingCapitalAssumptions,
+  updateOtherAssumptions,
+  updateCalculationParameters,
+  updateAllCalculationParameters,
 } = scenariosSlice.actions;
 
 // 導出 reducer
@@ -296,7 +454,7 @@ export const selectScenarioDifferences = (state: { scenarios: ScenariosState }) 
   const base = state.scenarios.scenarios.base;
   const upside = state.scenarios.scenarios.upside;
   const downside = state.scenarios.scenarios.downside;
-  
+
   return {
     upside: {
       revenueGrowth: upside.revenueGrowthRate - base.revenueGrowthRate,
@@ -308,5 +466,38 @@ export const selectScenarioDifferences = (state: { scenarios: ScenariosState }) 
       ebitdaMargin: downside.ebitdaMargin - base.ebitdaMargin,
       exitMultiple: downside.exitEvEbitdaMultiple - base.exitEvEbitdaMultiple,
     },
+  };
+};
+
+/**
+ * 將當前情境的 ScenarioAssumptions 轉換為 FutureAssumptions 格式
+ * 用於計算層兼容（計算函數仍使用 FutureAssumptions 簽名）
+ */
+export const selectActiveAssumptionsAsFutureAssumptions = (
+  state: { scenarios: ScenariosState }
+): FutureAssumptions => {
+  const scenario = state.scenarios.scenarios[state.scenarios.current];
+  return {
+    // 增長假設
+    revenueGrowthRate: scenario.revenueGrowthRate,
+    ebitdaMargin: scenario.ebitdaMargin,
+    netMargin: scenario.netMargin,
+    // 成本結構
+    cogsAsPercentageOfRevenue: scenario.cogsAsPercentageOfRevenue,
+    operatingExpensesAsPercentageOfRevenue: scenario.operatingExpensesAsPercentageOfRevenue,
+    // 資本支出
+    capexAsPercentageOfRevenue: scenario.capexAsPercentageOfRevenue,
+    capexGrowthRate: scenario.capexGrowthRate,
+    // 營運資本
+    accountsReceivableDays: scenario.accountsReceivableDays,
+    inventoryDays: scenario.inventoryDays,
+    accountsPayableDays: scenario.accountsPayableDays,
+    // 其他
+    taxRate: scenario.taxRate,
+    discountRate: scenario.discountRate,
+    // 計算參數
+    depreciationToCapexRatio: scenario.depreciationToCapexRatio,
+    fixedAssetsToCapexMultiple: scenario.fixedAssetsToCapexMultiple,
+    revolvingCreditRepaymentRate: scenario.revolvingCreditRepaymentRate,
   };
 };

@@ -33,6 +33,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { WaterfallRule } from '../../../types/financial';
+import { createDefaultWaterfallRules } from '../../../constants/dividendPolicyDefaults';
 
 interface WaterfallConfigurationProps {
   rules: WaterfallRule[];
@@ -48,34 +49,10 @@ const WaterfallConfiguration: React.FC<WaterfallConfigurationProps> = ({
   const [editingRule, setEditingRule] = useState<WaterfallRule | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // 初始化默認規則
+  // 初始化默認規則（使用統一預設值）
   React.useEffect(() => {
     if (rules.length === 0) {
-      const defaultRules: WaterfallRule[] = [
-        {
-          priority: 1,
-          type: 'preferredRedemption',
-          calculation: 'fixed',
-          value: 90,
-          description: '優先股本金贖回（90M固定金額）',
-        },
-        {
-          priority: 2,
-          type: 'preferredDividend',
-          calculation: 'formula',
-          value: preferredStockRate,
-          formula: `preferredOutstanding * ${preferredStockRate}%`,
-          description: `累積優先股股息（${preferredStockRate}% p.a.）`,
-        },
-        {
-          priority: 3,
-          type: 'commonDividend',
-          calculation: 'percentage',
-          value: 100,
-          description: '普通股股利（剩餘可分配現金）',
-        },
-      ];
-      onChange(defaultRules);
+      onChange(createDefaultWaterfallRules(preferredStockRate));
     }
   }, [rules.length, onChange, preferredStockRate]);
 
@@ -103,25 +80,30 @@ const WaterfallConfiguration: React.FC<WaterfallConfigurationProps> = ({
   const handleSaveRule = () => {
     if (!editingRule) return;
 
-    // 自動更新描述以匹配設定
+    // 自動生成描述和公式（用戶不需手動輸入）
     const ruleToSave = { ...editingRule };
-    
+
     if (ruleToSave.type === 'preferredRedemption') {
       if (ruleToSave.calculation === 'fixed') {
-        ruleToSave.description = `優先股本金贖回（${ruleToSave.value}M固定金額）`;
+        ruleToSave.description = `優先股本金贖回（${ruleToSave.value}M）`;
       } else if (ruleToSave.calculation === 'percentage') {
-        ruleToSave.description = `優先股本金贖回（優先股餘額的${ruleToSave.value}%）`;
+        ruleToSave.description = `優先股本金贖回（餘額${ruleToSave.value}%）`;
       }
+      ruleToSave.formula = undefined; // 不需要公式
     } else if (ruleToSave.type === 'preferredDividend') {
-      if (ruleToSave.calculation === 'percentage') {
-        ruleToSave.description = `優先股股息（${ruleToSave.value}% p.a.）`;
-      } else if (ruleToSave.calculation === 'formula') {
-        ruleToSave.description = `累積優先股股息（${preferredStockRate}% p.a.）`;
-      }
+      // 優先股股息：使用從股權注入讀取的利率
+      ruleToSave.calculation = 'formula';
+      ruleToSave.value = preferredStockRate;
+      ruleToSave.formula = `preferredOutstanding * ${preferredStockRate}%`;
+      ruleToSave.description = `優先股股息（${preferredStockRate}% p.a.）`;
     } else if (ruleToSave.type === 'commonDividend') {
-      if (ruleToSave.calculation === 'percentage') {
-        ruleToSave.description = `普通股股利（剩餘現金的${ruleToSave.value}%）`;
-      }
+      ruleToSave.description = ruleToSave.value === 100
+        ? '普通股股利（剩餘可分配現金）'
+        : `普通股股利（剩餘現金${ruleToSave.value}%）`;
+      ruleToSave.formula = undefined;
+    } else if (ruleToSave.type === 'carried') {
+      ruleToSave.description = `附帶權益（${ruleToSave.value}%）`;
+      ruleToSave.formula = undefined;
     }
 
     const updatedRules = rules.map(rule =>
@@ -287,62 +269,111 @@ const WaterfallConfiguration: React.FC<WaterfallConfigurationProps> = ({
           </Typography>
         </Box>
 
-        {/* 編輯對話框 */}
+        {/* 編輯對話框 - 簡化設計：系統自動生成公式 */}
         <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
           <DialogTitle>編輯分配規則</DialogTitle>
           <DialogContent>
             {editingRule && (
               <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <TextField
-                  label="描述"
-                  fullWidth
-                  value={editingRule.description}
-                  onChange={(e) => setEditingRule({ ...editingRule, description: e.target.value })}
-                />
-                
+                {/* 分配類型選擇 */}
                 <Select
                   value={editingRule.type}
-                  onChange={(e) => setEditingRule({ ...editingRule, type: e.target.value as WaterfallRule['type'] })}
+                  onChange={(e) => {
+                    const newType = e.target.value as WaterfallRule['type'];
+                    // 根據類型自動設定計算方式
+                    let newCalc: WaterfallRule['calculation'] = 'percentage';
+                    let newValue = editingRule.value;
+                    if (newType === 'preferredRedemption') {
+                      newCalc = 'fixed';
+                      newValue = 90;
+                    } else if (newType === 'preferredDividend') {
+                      newCalc = 'formula';
+                      newValue = preferredStockRate;
+                    } else if (newType === 'commonDividend') {
+                      newCalc = 'percentage';
+                      newValue = 100;
+                    }
+                    setEditingRule({ ...editingRule, type: newType, calculation: newCalc, value: newValue });
+                  }}
                   fullWidth
+                  displayEmpty
                 >
                   <MenuItem value="preferredRedemption">優先股贖回</MenuItem>
                   <MenuItem value="preferredDividend">優先股股息</MenuItem>
                   <MenuItem value="commonDividend">普通股股利</MenuItem>
                   <MenuItem value="carried">附帶權益</MenuItem>
                 </Select>
-                
-                <Select
-                  value={editingRule.calculation}
-                  onChange={(e) => setEditingRule({ ...editingRule, calculation: e.target.value as WaterfallRule['calculation'] })}
-                  fullWidth
-                >
-                  <MenuItem value="fixed">固定金額</MenuItem>
-                  <MenuItem value="percentage">百分比</MenuItem>
-                  <MenuItem value="formula">公式</MenuItem>
-                </Select>
-                
-                <TextField
-                  label="值"
-                  type="number"
-                  fullWidth
-                  value={editingRule.value}
-                  onChange={(e) => setEditingRule({ ...editingRule, value: Number(e.target.value) })}
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        {editingRule.calculation === 'fixed' ? 'M' : '%'}
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-                
-                {editingRule.calculation === 'formula' && (
+
+                {/* 根據類型顯示不同的設定 */}
+                {editingRule.type === 'preferredRedemption' && (
+                  <>
+                    <Select
+                      value={editingRule.calculation}
+                      onChange={(e) => setEditingRule({ ...editingRule, calculation: e.target.value as WaterfallRule['calculation'] })}
+                      fullWidth
+                    >
+                      <MenuItem value="fixed">固定金額</MenuItem>
+                      <MenuItem value="percentage">優先股餘額百分比</MenuItem>
+                    </Select>
+                    <TextField
+                      label={editingRule.calculation === 'fixed' ? '贖回金額' : '贖回比例'}
+                      type="number"
+                      fullWidth
+                      value={editingRule.value}
+                      onChange={(e) => setEditingRule({ ...editingRule, value: Number(e.target.value) })}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            {editingRule.calculation === 'fixed' ? '百萬元' : '%'}
+                          </InputAdornment>
+                        ),
+                      }}
+                      helperText={editingRule.calculation === 'fixed'
+                        ? '每年固定贖回的金額'
+                        : '每年贖回優先股餘額的比例'}
+                    />
+                  </>
+                )}
+
+                {editingRule.type === 'preferredDividend' && (
+                  <Box sx={{ p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>計算方式：</strong>優先股餘額 × 股息率
+                    </Typography>
+                    <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
+                      股息率自動從股權注入設定讀取：<strong>{preferredStockRate}%</strong>
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                      若需修改股息率，請至「股權注入」頁面調整優先股設定
+                    </Typography>
+                  </Box>
+                )}
+
+                {editingRule.type === 'commonDividend' && (
                   <TextField
-                    label="計算公式"
+                    label="分配比例"
+                    type="number"
                     fullWidth
-                    value={editingRule.formula || ''}
-                    onChange={(e) => setEditingRule({ ...editingRule, formula: e.target.value })}
-                    helperText="例如：preferredOutstanding * 0.08"
+                    value={editingRule.value}
+                    onChange={(e) => setEditingRule({ ...editingRule, value: Number(e.target.value) })}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    }}
+                    helperText="剩餘可分配現金中用於普通股股利的比例（通常為100%）"
+                  />
+                )}
+
+                {editingRule.type === 'carried' && (
+                  <TextField
+                    label="附帶權益比例"
+                    type="number"
+                    fullWidth
+                    value={editingRule.value}
+                    onChange={(e) => setEditingRule({ ...editingRule, value: Number(e.target.value) })}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    }}
+                    helperText="管理層或GP的附帶權益分成比例"
                   />
                 )}
               </Box>

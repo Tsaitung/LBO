@@ -14,6 +14,7 @@ import {
   EquityInjection,
 } from '../../types/financial';
 import { calculateTotalDebt } from './debtSchedule';
+import { DealCalculator } from '../../domain/deal/DealCalculator';
 
 interface PaymentScheduleItem {
   period?: number;
@@ -127,7 +128,7 @@ function calculatePreferredStock(
   dealDesign?: MnaDealDesign,
   previousPreferredStock: number = 0
 ): number {
-  const ev = baseEbitda * scenario.entryEvEbitdaMultiple;
+  const ev = DealCalculator.calculateEnterpriseValue(baseEbitda, scenario.entryEvEbitdaMultiple);
   const schedule = dealDesign?.assetDealSettings?.paymentSchedule?.schedule || [];
 
   // 發行比例：以付款排程中標記為特別股買回的百分比總和視為以特別股形式存在的比例；
@@ -184,7 +185,7 @@ export function calculateBalanceSheet(
   
   // 計算 Year 0 商譽
   const baseEbitda = incomeStatements[0]?.ebitda || businessMetrics.ebitda;
-  const enterpriseValueK = baseEbitda * (scenario!.entryEvEbitdaMultiple); // 單位：仟元
+  const enterpriseValueK = DealCalculator.calculateEnterpriseValue(baseEbitda, scenario!.entryEvEbitdaMultiple); // 單位：仟元
   // 商譽（仟元）：EV(仟) - 淨資產(仟)
   const isAssetDeal = dealDesign?.dealType === 'assetAcquisition';
   const sel = dealDesign?.assetSelections || {
@@ -218,7 +219,7 @@ export function calculateBalanceSheet(
   // 期初資產（資產交易按選取帶入）
   const year0 = {
     year: 0,
-    cash: isAssetDeal ? 0 : businessMetrics.cashAndCashEquivalents, // 資產交易期初現金為0，後續由現金流更新
+    cash: 0, // LBO 交易後期初現金為 0，由融資活動決定（被收購公司現金已包含在收購價格中）
     accountsReceivable: isAssetDeal ? (sel.accountsReceivable ? businessMetrics.accountsReceivable : 0) : businessMetrics.accountsReceivable,
     inventory: isAssetDeal ? (sel.inventory ? businessMetrics.inventory : 0) : businessMetrics.inventory,
     // Year 0 固定資產：以併購前業務指標的實際數字帶入（資產交易依選取）

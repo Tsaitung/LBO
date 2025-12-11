@@ -10,6 +10,7 @@ import {
   useCurrentScenario,
   useScenarios
 } from '../../../hooks/typed-hooks';
+import { DealCalculator } from '../../../domain/deal/DealCalculator';
 
 /**
  * 統一計算邏輯
@@ -22,12 +23,15 @@ export function useMnaDealCalculations() {
   const scenarios = useScenarios();
   const currentScenario = scenarios[currentScenarioKey];
 
-  // 企業價值計算
+  // 企業價值計算（統一使用 DealCalculator）
   const enterpriseValue = useMemo(() => {
     if (!businessMetrics?.ebitda || !currentScenario?.entryEvEbitdaMultiple) {
       return 0;
     }
-    return businessMetrics.ebitda * currentScenario.entryEvEbitdaMultiple;
+    return DealCalculator.calculateEnterpriseValue(
+      businessMetrics.ebitda, 
+      currentScenario.entryEvEbitdaMultiple
+    );
   }, [businessMetrics?.ebitda, currentScenario?.entryEvEbitdaMultiple]);
 
   // 選定資產價值計算

@@ -21,28 +21,25 @@ import { store, persistor } from './store/store';
 import Navigation from './components/Navigation';
 
 // 延遲載入所有路由組件
-const BusinessMetricsContainer = lazy(() => 
+const BusinessMetricsContainer = lazy(() =>
   import('./components/business-metrics/BusinessMetricsContainer')
 );
-const FutureAssumptions = lazy(() => 
-  import('./components/FutureAssumptions')
+const ScenarioManagerContainer = lazy(() =>
+  import('./components/scenario-manager/ScenarioManagerContainer')
 );
-const FinancingPlanning = lazy(() => 
+const FinancingPlanning = lazy(() =>
   import('./components/financing/FinancingPlanning')
 );
-const MnaDealContainer = lazy(() => 
+const MnaDealContainer = lazy(() =>
   import('./components/mna-deal-design/MnaDealContainer')
 );
-const ScenarioContainer = lazy(() => 
-  import('./components/scenario-manager/ScenarioContainer')
-);
-const DebtSchedule = lazy(() => 
+const DebtSchedule = lazy(() =>
   import('./components/DebtSchedule')
 );
-const TermSheet = lazy(() => 
+const TermSheet = lazy(() =>
   import('./components/TermSheet')
 );
-const Summary = lazy(() => 
+const Summary = lazy(() =>
   import('./components/Summary')
 );
 
@@ -119,10 +116,9 @@ function AppWithLazyLoading() {
                 <Suspense fallback={<LoadingComponent />}>
                   <Routes>
                     <Route path="/" element={<BusinessMetricsContainer />} />
-                    <Route path="/future-assumptions" element={<FutureAssumptions />} />
+                    <Route path="/scenario-manager" element={<ScenarioManagerContainer />} />
+                    <Route path="/mna-deal" element={<MnaDealContainer />} />
                     <Route path="/financing-planning" element={<FinancingPlanning />} />
-                    <Route path="/mna-deal-design" element={<MnaDealContainer />} />
-                    <Route path="/scenario-manager" element={<ScenarioContainer />} />
                     <Route path="/debt-schedule" element={<DebtSchedule />} />
                     <Route path="/term-sheet" element={<TermSheet />} />
                     <Route path="/summary" element={<Summary />} />

@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Box, Card, CardContent, Typography, Chip } from '@mui/material';
-import { ScenarioType } from '../ScenarioEngine';
+import { ScenarioType } from '../../../store/slices/scenarios.slice';
 
 interface ScenarioSelectorProps {
   selectedScenario: ScenarioType;

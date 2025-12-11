@@ -15,8 +15,7 @@ import { FinancingPlan } from '../types/financial';
 const navigationItems = [
   { label: 'Business Metrics', path: '/' },
   { label: 'Scenario Manager', path: '/scenario-manager' },
-  { label: 'Future Assumptions', path: '/future-assumptions' },
-  { label: 'M&A Deal Design', path: '/mna-deal-design' },
+  { label: 'M&A Deal', path: '/mna-deal' },
   { label: 'Financing Planning', path: '/financing-planning' },
   { label: 'Term Sheet', path: '/term-sheet' },
   { label: 'Summary', path: '/summary' },

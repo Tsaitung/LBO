@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { useBusinessMetrics, useScenarios } from '../../../hooks/typed-hooks';
 import { formatCurrency } from '../utils/formatters';
+import { DealCalculator } from '../../../domain/deal/DealCalculator';
 
 interface ValuationSectionProps {
   enterpriseValue: number;
@@ -34,13 +35,16 @@ export const ValuationSection: React.FC<ValuationSectionProps> = React.memo(({
   const scenarios = useScenarios();
 
   // 計算情境估值
-  const calculateScenarioValuation = (scenario: 'base' | 'upper' | 'lower') => {
+  const calculateScenarioValuation = (scenario: 'base' | 'upside' | 'downside') => {
     const scenarioData = scenarios[scenario];
     if (!scenarioData || !businessMetrics?.ebitda || !businessMetrics?.revenue) {
       return { ev: 0, evEbitda: 0, evSales: 0 };
     }
 
-    const evValue = businessMetrics.ebitda * scenarioData.entryEvEbitdaMultiple;
+    const evValue = DealCalculator.calculateEnterpriseValue(
+      businessMetrics.ebitda, 
+      scenarioData.entryEvEbitdaMultiple
+    );
     const evSalesMultiple = businessMetrics.revenue !== 0 
       ? evValue / businessMetrics.revenue 
       : 0;
@@ -54,8 +58,8 @@ export const ValuationSection: React.FC<ValuationSectionProps> = React.memo(({
 
   const valuations = {
     base: calculateScenarioValuation('base'),
-    upper: calculateScenarioValuation('upper'),
-    lower: calculateScenarioValuation('lower')
+    upside: calculateScenarioValuation('upside'),
+    downside: calculateScenarioValuation('downside')
   };
 
   return (
@@ -94,13 +98,13 @@ export const ValuationSection: React.FC<ValuationSectionProps> = React.memo(({
                 <Chip label="樂觀" color="success" size="small" />
               </TableCell>
               <TableCell align="right">
-                {formatCurrency(valuations.upper.ev)}
+                {formatCurrency(valuations.upside.ev)}
               </TableCell>
               <TableCell align="right">
-                {valuations.upper.evEbitda.toFixed(1)}x
+                {valuations.upside.evEbitda.toFixed(1)}x
               </TableCell>
               <TableCell align="right">
-                {valuations.upper.evSales.toFixed(2)}x
+                {valuations.upside.evSales.toFixed(2)}x
               </TableCell>
             </TableRow>
             <TableRow>
@@ -108,13 +112,13 @@ export const ValuationSection: React.FC<ValuationSectionProps> = React.memo(({
                 <Chip label="保守" color="warning" size="small" />
               </TableCell>
               <TableCell align="right">
-                {formatCurrency(valuations.lower.ev)}
+                {formatCurrency(valuations.downside.ev)}
               </TableCell>
               <TableCell align="right">
-                {valuations.lower.evEbitda.toFixed(1)}x
+                {valuations.downside.evEbitda.toFixed(1)}x
               </TableCell>
               <TableCell align="right">
-                {valuations.lower.evSales.toFixed(2)}x
+                {valuations.downside.evSales.toFixed(2)}x
               </TableCell>
             </TableRow>
           </TableBody>

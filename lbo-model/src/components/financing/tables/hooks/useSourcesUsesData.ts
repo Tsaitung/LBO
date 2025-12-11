@@ -7,6 +7,7 @@
 import { useBusinessMetrics, useMnaDeal, useScenarios, useCurrentScenario } from '../../../../hooks/typed-hooks';
 import { BusinessMetricsBeforeAcquisition, FinancingPlan, EquityInjection } from '../../../../types/financial';
 import { DealDesignWithPlans, ScenariosContainer } from '../../../../types/hooks.types';
+import { DealCalculator } from '../../../../domain/deal/DealCalculator';
 
 export interface SourceCategory {
   category: string;
@@ -46,8 +47,12 @@ export const useSourcesUsesData = (): SourcesUsesData => {
   const currentScenarioKey = useCurrentScenario();
   const currentScenarioData = scenarios[currentScenarioKey] || scenarios.base;
 
-  // Calculate enterprise value
-  const enterpriseValue = (businessMetrics.ebitda / 1000) * currentScenarioData.entryEvEbitdaMultiple;
+  // Calculate enterprise value（統一使用 DealCalculator，轉換為百萬元顯示）
+  const enterpriseValueK = DealCalculator.calculateEnterpriseValue(
+    businessMetrics.ebitda, 
+    currentScenarioData.entryEvEbitdaMultiple
+  );
+  const enterpriseValue = DealCalculator.toMillions(enterpriseValueK);
 
   // Calculate funding sources - using actual financing plans
   const totalDebt = mnaDealDesign.financingPlans.reduce((sum: number, plan: FinancingPlan) => sum + plan.amount, 0) / 1000;

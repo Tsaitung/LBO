@@ -188,6 +188,121 @@ npm run lighthouse                               # Performance audit
 - **Scenarios**: Parameter-driven sensitivity analysis
 - **Validation**: Real-time input validation with business rules
 
+## Dividend Policy System (2025-12-11)
+
+### Overview
+完整的股利政策設定系統，支援債務保護條件、分級觸發條件、瀑布式分配。
+
+### Architecture
+
+```
+UI Layer (設定)                     Calculation Layer (計算)
+┌─────────────────────────────┐    ┌─────────────────────────────┐
+│ DividendPolicyTable.tsx     │    │ cashFlow.ts                 │
+│ ├─ DebtProtectionSettings   │───▶│ ├─ checkAllCovenants()     │
+│ ├─ TieredTriggerSettings    │    │ ├─ selectApplicableTier()   │
+│ └─ WaterfallConfiguration   │    │ └─ applyWaterfallDistribution()
+└─────────────────────────────┘    └─────────────────────────────┘
+              │                                  │
+              └──────────┬───────────────────────┘
+                         ▼
+              ┌─────────────────────────────┐
+              │ dividendPolicyDefaults.ts   │
+              │ (統一預設值)                  │
+              └─────────────────────────────┘
+```
+
+### Core Functions
+
+#### 1. `checkAllCovenants()`
+檢查所有債務保護條件，違規時禁止普通股利分配。
+
+| Covenant | 公式 | 說明 |
+|----------|------|------|
+| DSCR | EBITDA / (Interest + Principal) | 債務服務覆蓋率 |
+| Net Leverage | Debt / EBITDA | 淨槓桿率上限 |
+| Interest Coverage | EBITDA / Interest | 利息覆蓋率下限 |
+| Min Cash Months | Cash / Monthly OpEx | 最低現金保留月數 |
+
+#### 2. `selectApplicableTier()`
+根據財務表現選擇適用的分紅層級。
+
+```typescript
+// 選擇邏輯（由高到低）
+// 1. 檢查所有門檻：EBITDA ≥ threshold && FCFF ≥ threshold && Leverage ≤ threshold
+// 2. 符合條件中選最高 payoutRatio
+// 3. 無符合時使用最低層級（而非 0%）
+```
+
+#### 3. `applyWaterfallDistribution()`
+按優先級順序分配可用現金。
+
+```
+Priority 1: 優先股本金贖回 (fixed amount)
+    ↓ 剩餘
+Priority 2: 優先股股息 (formula: outstanding × rate)
+    ↓ 剩餘
+Priority 3: 普通股股利 (percentage: 100% of remaining)
+```
+
+### Unified Defaults
+
+```typescript
+// /src/constants/dividendPolicyDefaults.ts
+DEFAULT_COVENANTS: {
+  dscr: { value: 1.25, enabled: true },
+  netLeverage: { value: 4.0, enabled: true },
+  interestCoverage: { value: 3.0, enabled: true },
+  minCashMonths: { value: 3, enabled: true },
+}
+
+DEFAULT_TIERS: [
+  { payoutRatio: 30%, ebitdaThreshold: 50M, leverageThreshold: 5.0x },
+  { payoutRatio: 50%, ebitdaThreshold: 80M, leverageThreshold: 3.5x },
+  { payoutRatio: 70%, ebitdaThreshold: 100M, leverageThreshold: 2.5x },
+]
+```
+
+### Calculation Flow
+
+```
+Step 1: checkAllCovenants() → passed/failed
+        │
+        ▼ (if passed)
+Step 2: selectApplicableTier() → payoutRatio (0-1)
+        │
+        ▼
+Step 3: Calculate availableForCommon
+        │
+        ▼
+Step 4: if (waterfallRules exist)
+        │   └── applyWaterfallDistribution()
+        │ else
+        │   └── availableForCommon × payoutRatio
+        │
+        ▼
+commonDividend (if covenant failed → 0)
+```
+
+### File References
+
+| File | Purpose |
+|------|---------|
+| `src/calculations/financial/cashFlow.ts` | Core calculation functions |
+| `src/constants/dividendPolicyDefaults.ts` | Unified default values |
+| `src/components/financing/tables/DividendPolicyTable.tsx` | Main UI controller |
+| `src/components/financing/dividend/DebtProtectionSettings.tsx` | Covenant settings UI |
+| `src/components/financing/dividend/TieredTriggerSettings.tsx` | Tier settings UI |
+| `src/components/financing/dividend/WaterfallConfiguration.tsx` | Waterfall settings UI |
+| `src/types/financial.ts` | Type definitions |
+
+### Design Principles (Linus Style)
+
+1. **No Special Cases**: All covenants use same check pattern
+2. **Single Source of Truth**: `dividendPolicyDefaults.ts` for all defaults
+3. **Configuration Driven**: UI configures, calculation executes
+4. **Fail Safe**: Covenant violation → no dividend (conservative default)
+
 ## Technical Debt & Next Steps
 
 ### Immediate (This Week)
@@ -209,5 +324,5 @@ npm run lighthouse                               # Performance audit
 
 **Philosophy**: Following Linus Torvalds' "good taste" - eliminate special cases, keep it simple, solve real problems not imaginary ones.
 
-**Last Updated**: 2024-12-12  
+**Last Updated**: 2025-12-11
 **System Status**: Production Ready ✅

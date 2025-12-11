@@ -19,8 +19,7 @@ import { ScenarioType } from '../store/slices/scenarios.slice';
 
 // Modular actions
 import { setBusinessMetrics as updateMetrics } from '../store/slices/businessMetrics.slice';
-import { updateAssumptions } from '../store/slices/assumptions.slice';
-import { 
+import {
   updateDealDesign,
   addEquityInjection,
   updateEquityInjection,
@@ -35,6 +34,12 @@ import {
 import {
   setCurrentScenario,
   updateScenario,
+  updateGrowthAssumptions,
+  updateCostStructure,
+  updateCapexAssumptions,
+  updateWorkingCapitalAssumptions,
+  updateOtherAssumptions,
+  updateCalculationParameters,
 } from '../store/slices/scenarios.slice';
 import { ScenarioAssumptions } from '../types/financial';
 
@@ -55,9 +60,72 @@ export const useStoreActions = () => {
       dispatch(updateMetrics({ data: updates }));
     },
 
-    // Future Assumptions
+    // Future Assumptions (now delegates to current scenario)
     updateFutureAssumptions: (updates: Partial<FutureAssumptions>) => {
-      dispatch(updateAssumptions(updates));
+      // 將 FutureAssumptions 更新映射到當前情境
+      // 增長類
+      if ('revenueGrowthRate' in updates || 'ebitdaMargin' in updates || 'netMargin' in updates) {
+        dispatch(updateGrowthAssumptions({
+          scenario: 'base',
+          updates: {
+            revenueGrowthRate: updates.revenueGrowthRate,
+            ebitdaMargin: updates.ebitdaMargin,
+            netMargin: updates.netMargin,
+          },
+        }));
+      }
+      // 成本結構
+      if ('cogsAsPercentageOfRevenue' in updates || 'operatingExpensesAsPercentageOfRevenue' in updates) {
+        dispatch(updateCostStructure({
+          scenario: 'base',
+          updates: {
+            cogsAsPercentageOfRevenue: updates.cogsAsPercentageOfRevenue,
+            operatingExpensesAsPercentageOfRevenue: updates.operatingExpensesAsPercentageOfRevenue,
+          },
+        }));
+      }
+      // 資本支出
+      if ('capexAsPercentageOfRevenue' in updates || 'capexGrowthRate' in updates) {
+        dispatch(updateCapexAssumptions({
+          scenario: 'base',
+          updates: {
+            capexAsPercentageOfRevenue: updates.capexAsPercentageOfRevenue,
+            capexGrowthRate: updates.capexGrowthRate,
+          },
+        }));
+      }
+      // 營運資本
+      if ('accountsReceivableDays' in updates || 'inventoryDays' in updates || 'accountsPayableDays' in updates) {
+        dispatch(updateWorkingCapitalAssumptions({
+          scenario: 'base',
+          updates: {
+            accountsReceivableDays: updates.accountsReceivableDays,
+            inventoryDays: updates.inventoryDays,
+            accountsPayableDays: updates.accountsPayableDays,
+          },
+        }));
+      }
+      // 稅率和折現率
+      if ('taxRate' in updates || 'discountRate' in updates) {
+        dispatch(updateOtherAssumptions({
+          scenario: 'base',
+          updates: {
+            taxRate: updates.taxRate,
+            discountRate: updates.discountRate,
+          },
+        }));
+      }
+      // 計算參數
+      if ('depreciationToCapexRatio' in updates || 'fixedAssetsToCapexMultiple' in updates || 'revolvingCreditRepaymentRate' in updates) {
+        dispatch(updateCalculationParameters({
+          scenario: 'base',
+          updates: {
+            depreciationToCapexRatio: updates.depreciationToCapexRatio,
+            fixedAssetsToCapexMultiple: updates.fixedAssetsToCapexMultiple,
+            revolvingCreditRepaymentRate: updates.revolvingCreditRepaymentRate,
+          },
+        }));
+      }
     },
 
     // M&A Deal Design

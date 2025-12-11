@@ -45,11 +45,11 @@ const initialState: MnaDealDesign = {
     },
   },
   
-  // 付款結構
+  // 付款結構（三期付款：40%/30%/30%）
   paymentStructure: {
-    upfrontPayment: 100,
-    year1MilestonePayment: 0,
-    year2MilestonePayment: 0,
+    upfrontPayment: 40,
+    year1MilestonePayment: 30,
+    year2MilestonePayment: 30,
     paymentMethod: 'cash',
   },
   

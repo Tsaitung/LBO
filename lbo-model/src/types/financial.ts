@@ -381,19 +381,46 @@ export interface MnaDealDesign {
 export interface YearZeroData extends BusinessMetricsBeforeAcquisition {}
 
 export interface ScenarioAssumptions {
+  // ========== 情境特有參數 ==========
   entryEvEbitdaMultiple: number; // 入場 EV/EBITDA 倍數
   exitEvEbitdaMultiple: number; // 出場 EV/EBITDA 倍數
   seniorDebtEbitda: number; // 優先債務/EBITDA
   mezzDebtEbitda: number; // 中間債務/EBITDA
-  // 成本結構（移入情境管理）
+
+  // ========== 增長假設 ==========
+  revenueGrowthRate: number; // 營收增長率 (%)
+  ebitdaMargin: number; // EBITDA 利潤率 (%)
+  netMargin: number; // 淨利率 (%)
+
+  // ========== 成本結構假設 ==========
   cogsAsPercentageOfRevenue: number; // COGS 占營收比例 (%)
   operatingExpensesAsPercentageOfRevenue: number; // 營業費用占營收比例 (%)
-  revenueGrowthRate: number; // 營收增長率
-  ebitdaMargin: number; // EBITDA 利潤率
-  netMargin: number; // 淨利率
-  capExPctSales: number; // CapEx/銷售百分比
-  nwcPctSales: number; // NWC/銷售百分比
-  corporateTaxRate: number; // 企業稅率
+
+  // ========== 資本支出假設 ==========
+  capexAsPercentageOfRevenue: number; // CapEx/營收比例 (%)
+  capexGrowthRate: number; // CapEx 增長率 (%)
+
+  // ========== 營運資本假設 ==========
+  accountsReceivableDays: number; // 應收帳款天數
+  inventoryDays: number; // 存貨天數
+  accountsPayableDays: number; // 應付帳款天數
+
+  // ========== 其他財務假設 ==========
+  taxRate: number; // 稅率 (%)
+  discountRate: number; // 折現率 (%)
+
+  // ========== 計算參數設定 ==========
+  depreciationToCapexRatio: number; // D&A/CapEx 比例 (%)
+  fixedAssetsToCapexMultiple: number; // 固定資產/CapEx 倍數
+  revolvingCreditRepaymentRate: number; // 循環信用年償還率 (%)
+
+  // ========== 向後兼容欄位（保留舊名稱映射） ==========
+  /** @deprecated 使用 capexAsPercentageOfRevenue */
+  capExPctSales?: number;
+  /** @deprecated 移除，改用天數計算 */
+  nwcPctSales?: number;
+  /** @deprecated 使用 taxRate */
+  corporateTaxRate?: number;
 }
 
 export type ScenarioType = 'base' | 'upper' | 'lower';

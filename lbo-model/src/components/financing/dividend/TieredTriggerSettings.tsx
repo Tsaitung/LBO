@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import { DividendTier } from '../../../types/financial';
+import { DEFAULT_TIERS } from '../../../constants/dividendPolicyDefaults';
 
 interface TieredTriggerSettingsProps {
   tiers: DividendTier[];
@@ -46,35 +47,9 @@ const TieredTriggerSettings: React.FC<TieredTriggerSettingsProps> = ({
     return labels[index] || `層級 ${index + 1}`;
   };
 
-  // 如果沒有tiers，初始化默認值
+  // 如果沒有 tiers，使用統一預設值初始化
   if (tiers.length === 0) {
-    const defaultTiers: DividendTier[] = [
-      {
-        id: 'tier-1',
-        name: '基礎分紅',
-        ebitdaThreshold: 50,
-        fcffThreshold: 20,
-        leverageThreshold: 5.0,
-        payoutRatio: 30,
-      },
-      {
-        id: 'tier-2',
-        name: '標準分紅',
-        ebitdaThreshold: 80,
-        fcffThreshold: 40,
-        leverageThreshold: 3.5,
-        payoutRatio: 50,
-      },
-      {
-        id: 'tier-3',
-        name: '積極分紅',
-        ebitdaThreshold: 100,
-        fcffThreshold: 60,
-        leverageThreshold: 2.5,
-        payoutRatio: 70,
-      },
-    ];
-    onChange(defaultTiers);
+    onChange(DEFAULT_TIERS);
     return null;
   }
 
