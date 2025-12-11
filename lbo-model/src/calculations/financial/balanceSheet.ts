@@ -12,17 +12,10 @@ import {
   MnaDealDesign,
   ScenarioAssumptions,
   EquityInjection,
+  PaymentScheduleItem,
 } from '../../types/financial';
 import { calculateTotalDebt } from './debtSchedule';
 import { DealCalculator } from '../../domain/deal/DealCalculator';
-
-interface PaymentScheduleItem {
-  period?: number;
-  percentage?: number;
-  timing?: 'preClosing' | 'year1' | 'year2' | 'year3' | 'year4' | 'year5';
-  timingDetail?: 'beginning' | 'end';
-  paymentMethod?: 'cash' | 'specialSharesBuyback';
-}
 
 /**
  * 統一的股東權益滾動計算

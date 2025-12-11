@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Box,
   Accordion,
@@ -16,6 +16,8 @@ import {
   TableRow,
   Paper,
   Chip,
+  Alert,
+  AlertTitle,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CalculateIcon from '@mui/icons-material/Calculate';
@@ -262,6 +264,53 @@ const DividendPolicyTable: React.FC = () => {
   // const preview = calculateDividendPreview(); // Reserved for future display
   const multiYearPreview = calculateMultiYearDividendPreview();
 
+  // 計算警示資訊
+  const dividendWarning = useMemo(() => {
+    if (multiYearPreview.length === 0) return null;
+
+    const yearsWithNoDividend = multiYearPreview.filter(row => !row.allConditionsMet);
+    const yearsWithDividend = multiYearPreview.filter(row => row.allConditionsMet);
+
+    if (yearsWithNoDividend.length === multiYearPreview.length) {
+      // 所有年份都不能分配
+      const reasons: string[] = [];
+
+      // 檢查最常見的失敗原因
+      const cashFailures = multiYearPreview.filter(row => !row.cashCompliant);
+      const dscrFailures = multiYearPreview.filter(row => !row.dscrCompliant);
+      const leverageFailures = multiYearPreview.filter(row => !row.leverageCompliant);
+      const coverageFailures = multiYearPreview.filter(row => !row.coverageCompliant);
+
+      if (cashFailures.length > 0) {
+        reasons.push(`現金月數不足 (Year ${cashFailures.map(r => r.year).join(', ')})`);
+      }
+      if (dscrFailures.length > 0) {
+        reasons.push(`DSCR 低於門檻 (Year ${dscrFailures.map(r => r.year).join(', ')})`);
+      }
+      if (leverageFailures.length > 0) {
+        reasons.push(`淨槓桿率超標 (Year ${leverageFailures.map(r => r.year).join(', ')})`);
+      }
+      if (coverageFailures.length > 0) {
+        reasons.push(`利息覆蓋率不足 (Year ${coverageFailures.map(r => r.year).join(', ')})`);
+      }
+
+      return {
+        severity: 'error' as const,
+        title: '所有年份均未達股利分配條件',
+        reasons,
+        suggestion: '建議：檢視融資結構、降低債務、或調整 Covenant 門檻',
+      };
+    } else if (yearsWithNoDividend.length > 0) {
+      return {
+        severity: 'warning' as const,
+        title: `部分年份未達股利分配條件 (Year ${yearsWithNoDividend.map(r => r.year).join(', ')})`,
+        reasons: [],
+        suggestion: `可分配年份：Year ${yearsWithDividend.map(r => r.year).join(', ')}`,
+      };
+    }
+    return null;
+  }, [multiYearPreview]);
+
   return (
     <Box>
       {/* 頂部操作欄 */}
@@ -287,6 +336,23 @@ const DividendPolicyTable: React.FC = () => {
         </Box>
       </Box>
 
+
+      {/* 警示資訊 */}
+      {dividendWarning && (
+        <Alert severity={dividendWarning.severity} sx={{ mb: 3 }}>
+          <AlertTitle>{dividendWarning.title}</AlertTitle>
+          {dividendWarning.reasons.length > 0 && (
+            <Box component="ul" sx={{ m: 0, pl: 2 }}>
+              {dividendWarning.reasons.map((reason, idx) => (
+                <li key={idx}>{reason}</li>
+              ))}
+            </Box>
+          )}
+          <Typography variant="body2" sx={{ mt: 1, fontWeight: 500 }}>
+            {dividendWarning.suggestion}
+          </Typography>
+        </Alert>
+      )}
 
       {/* 多年度預覽表格 */}
       <Card sx={{ mb: 3 }}>

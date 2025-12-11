@@ -1,11 +1,11 @@
-import { 
+import {
   useBusinessMetrics,
   useMnaDeal,
   useAssumptions,
   useScenarios,
   useCurrentScenario,
 } from './typed-hooks';
-import { FinancingPlan, EquityInjection } from '../types/financial';
+import { FinancingPlan, EquityInjection, PaymentScheduleItem } from '../types/financial';
 
 interface SelectedAsset {
   id: string;
@@ -13,14 +13,6 @@ interface SelectedAsset {
   bookValue: number;
   fairValue: number;
   selected: boolean;
-}
-
-interface PaymentScheduleItem {
-  period: number;
-  percentage: number;
-  timing: 'preClosing' | 'year1' | 'year2' | 'year3' | 'year4' | 'year5';
-  timingDetail: 'beginning' | 'end';
-  paymentMethod: 'cash' | 'specialSharesBuyback';
 }
 
 /**

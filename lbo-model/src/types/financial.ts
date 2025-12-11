@@ -103,6 +103,39 @@ export type RepaymentMethod =
 // 保留 LoanType 作為後向兼容
 export type LoanType = FacilityType | RepaymentMethod;
 
+// 付款排程付款方式 - M&A 交易常見付款機制
+export type SchedulePaymentMethod =
+  | 'cash'                   // 現金
+  | 'specialSharesBuyback'   // 特別股買回
+  | 'earningsAdjustment'     // 盈餘調整（Earnout）
+  | 'sellerNote'             // 賣方融資票據
+  | 'escrow'                 // 第三方託管
+  | 'stockSwap'              // 股權交換
+  | 'assetSwap'              // 資產交換
+  | 'contingentPayment'      // 或有對價
+  | 'deferred';              // 遞延付款
+
+// 付款排程時間點
+export type SchedulePaymentTiming =
+  | 'preClosing'             // 交割前
+  | 'closing'                // 交割時
+  | 'postClosing'            // 交割後
+  | 'year1'                  // 第一年
+  | 'year2'                  // 第二年
+  | 'year3'                  // 第三年
+  | 'year4'                  // 第四年
+  | 'year5'                  // 第五年
+  | 'milestone';             // 里程碑達成時
+
+// 付款排程項目 - 統一介面，消除重複定義
+export interface PaymentScheduleItem {
+  period: number;                        // 期數
+  percentage: number;                    // 比例 (%)
+  timing: SchedulePaymentTiming;         // 時間點
+  timingDetail: 'beginning' | 'end';     // 期初後或期末前
+  paymentMethod: SchedulePaymentMethod;  // 每期付款方式
+}
+
 // 股權類型
 export type EquityType = 'common' | 'preferred' | 'classA' | 'classB';
 
@@ -286,7 +319,7 @@ export interface MnaDealDesign {
     requireLiquidation: boolean; // 是否要求被併方限期清算公司
     liquidationPeriod: number; // 清算期限 (月)
     requireDissolution: boolean; // 是否要求註銷公司
-    milestonePaymentMethod: 'cash' | 'specialSharesBuyback'; // 里程碑付款方式：現金 | 特別股買回
+    milestonePaymentMethod: SchedulePaymentMethod; // 里程碑付款方式
     specialSharesDetails: {
       dividendRate: number; // 特別股股息率 (%)
       conversionRights: boolean; // 是否有轉換權
@@ -296,13 +329,7 @@ export interface MnaDealDesign {
     // 分期付款設定（特別股買回機制）
     paymentSchedule: {
       installments: number; // 分期期數
-      schedule: Array<{
-        period: number; // 期數
-        percentage: number; // 比例 (%)
-        timing: 'preClosing' | 'year1' | 'year2' | 'year3' | 'year4' | 'year5'; // 時間點
-        timingDetail: 'beginning' | 'end'; // 期初後或期末前
-        paymentMethod: 'cash' | 'specialSharesBuyback'; // 每期付款方式：現金 | 特別股買回
-      }>;
+      schedule: PaymentScheduleItem[]; // 使用統一介面
     };
     // 選定資產清單（資產收購時使用）
     selectedAssets?: Array<{
@@ -481,6 +508,18 @@ export interface BalanceSheetData {
   nwc?: number; // 淨營運資本（可選）
 }
 
+// 股利分配診斷資訊
+export interface DividendDiagnostics {
+  covenantsPassed: boolean;
+  failedCovenants: string[];
+  availableForDividend: number;
+  minimumCashReserve: number;
+  endingCashBeforeDividend: number;
+  selectedTier?: string;
+  payoutRatio: number;
+  reason?: string; // 不分配的原因
+}
+
 export interface CashFlowData {
   year: number;
   operatingCashFlow: number;
@@ -502,6 +541,8 @@ export interface CashFlowData {
   transactionFeePaid?: number;
   cashAcquisitionPayment?: number;
   nwcChange?: number;
+  // 股利診斷資訊
+  dividendDiagnostics?: DividendDiagnostics;
 }
 
 export interface DebtScheduleData {

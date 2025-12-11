@@ -44,33 +44,66 @@ export class DealCalculator {
   }
 
   /**
+   * 將 timing 轉換為年份
+   * @param timing - 付款時間點
+   * @returns 對應的年份 (0, 1, 2, ...)
+   */
+  private static timingToYear(timing: string | undefined): number {
+    if (!timing) return 0;
+    if (timing === 'preClosing' || timing === 'closing') return 0;
+    if (timing === 'postClosing') return 0; // 交割後仍算 Year 0
+    if (timing.startsWith('year')) {
+      const n = Number(timing.replace('year', ''));
+      return isNaN(n) ? 0 : n;
+    }
+    if (timing === 'milestone') return -1; // 里程碑特殊處理，不在固定年份
+    return 0;
+  }
+
+  /**
    * 計算分期付款金額
    * 統一處理新舊付款系統
+   *
+   * @param purchasePrice - 購買價格
+   * @param year - 目標年份 (0, 1, 2, ...)
+   * @param dealDesign - 交易設計
+   * @param timingDetail - 可選：篩選期初('beginning')或期末('end')，不指定則兩者都計入
    */
   static calculatePaymentAmount(
     purchasePrice: number,
-    period: number, // 1=Year0, 2=Year1, 3=Year2
-    dealDesign: MnaDealDesign
+    year: number,
+    dealDesign: MnaDealDesign,
+    timingDetail?: 'beginning' | 'end'
   ): number {
     // 優先使用 paymentSchedule（新系統）
     const schedule = dealDesign?.assetDealSettings?.paymentSchedule?.schedule || [];
-    
+
     if (schedule.length > 0) {
       const paymentPct = schedule
-        .filter((s) => s?.paymentMethod === 'cash' && Number(s?.period) === period)
+        .filter((s) => {
+          // 篩選現金付款
+          if (s?.paymentMethod !== 'cash') return false;
+          // 根據 timing 轉換為年份並比對
+          const itemYear = this.timingToYear(s?.timing);
+          if (itemYear !== year) return false;
+          // 如果指定了 timingDetail，進一步篩選
+          if (timingDetail && s?.timingDetail !== timingDetail) return false;
+          return true;
+        })
         .reduce((sum: number, s) => sum + (Number(s?.percentage) || 0), 0);
       return purchasePrice * (paymentPct / 100);
     }
-    
+
     // Fallback：使用 paymentStructure（舊系統）
+    // 舊系統：period 1=Year0, 2=Year1, 3=Year2
     const ps = dealDesign?.paymentStructure || {};
     const periodMap: Record<number, number> = {
-      1: Number(ps.upfrontPayment ?? 0),
-      2: Number(ps.year1MilestonePayment ?? 0),
-      3: Number(ps.year2MilestonePayment ?? 0),
+      0: Number(ps.upfrontPayment ?? 0),
+      1: Number(ps.year1MilestonePayment ?? 0),
+      2: Number(ps.year2MilestonePayment ?? 0),
     };
-    
-    const paymentPct = periodMap[period] || 0;
+
+    const paymentPct = periodMap[year] || 0;
     return purchasePrice * (paymentPct / 100);
   }
 

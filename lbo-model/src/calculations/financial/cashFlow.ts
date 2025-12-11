@@ -14,6 +14,7 @@ import {
   DebtProtectionCovenants,
   WaterfallRule,
   DividendTier,
+  DividendDiagnostics,
 } from '../../types/financial';
 import { calculateTotalPrincipalRepayment } from './debtSchedule';
 import { DealCalculator } from '../../domain/deal/DealCalculator';
@@ -354,12 +355,17 @@ export function calculateCashFlow(
       tiers?: unknown[];
     };
   };
-  const getCashPaymentForPeriod = (period: number) => {
-    return DealCalculator.calculatePaymentAmount(purchasePrice, period, dealDesign);
+  /**
+   * 取得指定年份的現金付款金額
+   * @param year - 年份 (0, 1, 2, ...)
+   * @param timingDetail - 可選：篩選期初或期末
+   */
+  const getCashPaymentForYear = (year: number, timingDetail?: 'beginning' | 'end') => {
+    return DealCalculator.calculatePaymentAmount(purchasePrice, year, dealDesign, timingDetail);
   };
-  
-  // Year 0 現金流計算：扣期1（期末）的現金支付與當期交易費
-  const cashPurchaseY0 = getCashPaymentForPeriod(1);
+
+  // Year 0 現金流計算：包含交割前/交割時的現金支付與當期交易費
+  const cashPurchaseY0 = getCashPaymentForYear(0);
   // Year 0（併購前）不計入營業活動現金流
   const year0OperatingCashFlow = 0;
   const year0InvestingCashFlow = -(year0TransactionFee + cashPurchaseY0);
@@ -442,8 +448,8 @@ export function calculateCashFlow(
       baseEbitda
     );
     
-    // 期別 = 年 + 1（期1=Year 0 期末；期2=Year 1 期末；期3=Year 2 期末）
-    const cashPurchaseThisYear = getCashPaymentForPeriod(year + 1);
+    // 取得該年度的現金收購付款（根據 timing 設定）
+    const cashPurchaseThisYear = getCashPaymentForYear(year);
     // 投資活動現金流（包含購買價的現金支付）
     const investingCashFlow = calculateInvestingCashFlow(capex + cashPurchaseThisYear, transactionFee);
     
@@ -552,23 +558,36 @@ export function calculateCashFlow(
     const waterfallPreferredRate = Number(dealWithSettings?.assetDealSettings?.specialSharesDetails?.dividendRate ?? 8);
 
     let commonDividend = 0;
-    if (covenantCheck.passed) {
-      // Covenant 通過，檢查是否有 Waterfall 規則
-      if (waterfallRules && waterfallRules.length > 0) {
-        // 使用 Waterfall 分配（注意：優先股贖回和股息已在前面處理，這裡只處理普通股利）
-        const dist = applyWaterfallDistribution(
-          availableForCommon,
-          waterfallRules,
-          balanceSheets[year]?.preferredStock || 0,
-          waterfallPreferredRate
-        );
-        commonDividend = dist.commonDividend;
-      } else {
-        // 無 Waterfall 規則，使用 Tier payoutRatio
-        commonDividend = availableForCommon * payoutRatio;
-      }
+    let dividendReason = '';
+
+    if (!covenantCheck.passed) {
+      dividendReason = `Covenant 違規: ${covenantCheck.failedCovenants.join(', ')}`;
+    } else if (availableForCommon <= 0) {
+      dividendReason = `可分配現金不足 (期末現金 ${(endingCashBeforeCommon / 1000).toFixed(1)}M - 最低保留 ${(minimumCashReserve / 1000).toFixed(1)}M ≤ 0)`;
+    } else if (waterfallRules && waterfallRules.length > 0) {
+      // 使用 Waterfall 分配
+      const dist = applyWaterfallDistribution(
+        availableForCommon,
+        waterfallRules,
+        balanceSheets[year]?.preferredStock || 0,
+        waterfallPreferredRate
+      );
+      commonDividend = dist.commonDividend;
+    } else {
+      // 無 Waterfall 規則，使用 Tier payoutRatio
+      commonDividend = availableForCommon * payoutRatio;
     }
-    // Covenant 違規時 commonDividend = 0（不分配普通股利）
+
+    // 建立診斷資訊
+    const diagnostics: DividendDiagnostics = {
+      covenantsPassed: covenantCheck.passed,
+      failedCovenants: covenantCheck.failedCovenants,
+      availableForDividend: availableForCommon,
+      minimumCashReserve,
+      endingCashBeforeDividend: endingCashBeforeCommon,
+      payoutRatio,
+      reason: dividendReason || undefined,
+    };
 
     // 將普通股利納入融資現金流（作為現金流出）
     const financingCashFlow = financingCashFlowBeforeCommon - commonDividend;
@@ -599,6 +618,7 @@ export function calculateCashFlow(
       transactionFeePaid: transactionFee,
       cashAcquisitionPayment: cashPurchaseThisYear,
       nwcChange,
+      dividendDiagnostics: diagnostics,
     });
     
     // 更新資產負債表：現金和股東權益
